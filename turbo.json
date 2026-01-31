@@ -1,0 +1,72 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "description": "Build the application",
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "build/**"],
+      "cache": true
+    },
+    "dev": {
+      "description": "Start development server",
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "description": "Start production server",
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build"]
+    },
+    "start:dev": {
+      "description": "Start API development server",
+      "cache": false,
+      "persistent": true
+    },
+    "start:prod": {
+      "description": "Start API production server",
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build"]
+    },
+    "lint": {
+      "description": "Run linter",
+      "outputs": [],
+      "cache": true
+    },
+    "test": {
+      "description": "Run tests",
+      "cache": true,
+      "outputs": ["coverage/**"],
+      "dependsOn": []
+    },
+    "test:watch": {
+      "description": "Run tests in watch mode",
+      "cache": false,
+      "persistent": true
+    },
+    "test:cov": {
+      "description": "Run tests with coverage",
+      "cache": true,
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "description": "Run end-to-end tests",
+      "cache": true
+    },
+    "format": {
+      "description": "Format code",
+      "cache": true
+    },
+    "clean": {
+      "description": "Clean build outputs",
+      "cache": false
+    }
+  },
+  "globalDependencies": [
+    "tsconfig.json",
+    ".eslintrc.json",
+    "jest.config.js"
+  ],
+  "globalEnv": []
+}

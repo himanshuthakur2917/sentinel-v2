@@ -1,0 +1,10 @@
+migrations
+
+node_modules/
+.git/
+.github/
+
+# Turborepo
+.turbo/
+turbo.log
+*.tsbuildinfo

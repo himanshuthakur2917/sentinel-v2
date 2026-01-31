@@ -1,0 +1,24 @@
+{
+  "name": "sentinel-v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:cov": "turbo run test:cov",
+    "format": "turbo run format",
+    "clean": "turbo run clean"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.0",
+  "dependencies": {},
+  "devDependencies": {
+    "turbo": "^2.8.1"
+  }
+}
