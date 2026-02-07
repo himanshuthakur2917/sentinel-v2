@@ -1,6 +1,6 @@
-export type ReminderCategory = "work" | "personal" | "health" | "other";
-export type ReminderPriority = "low" | "medium" | "high";
-export type CompletionStatus = "pending" | "completed" | "skipped" | "deleted";
+import { ReminderCategory } from "./category";
+import { ReminderPriority } from "./priority";
+import { CompletionStatus } from "./status";
 
 export interface Reminder {
   id: string;

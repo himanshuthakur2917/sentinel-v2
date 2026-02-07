@@ -4,7 +4,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Reminder } from "./types";
+import { Reminder } from "@/types/reminder";
 
 export default function ReminderCard({ reminder }: { reminder: Reminder }) {
   const date = reminder.initial_deadline;
