@@ -1,12 +1,24 @@
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-const DashboardLayout = () => {
+const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="flex flex-col min-h-screen bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-       
-      </main>  
-    </div>
-  )
-}
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader />
+        {children}
+      </SidebarInset>
+    </SidebarProvider>
+  );
+};
 
-export default DashboardLayout
+export default DashboardLayout;
