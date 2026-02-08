@@ -4,10 +4,11 @@ import { AppService } from './app.service';
 import { ConfigModule } from './config';
 import { AuditModule } from './audit';
 import { DatabaseModule } from './database';
+import { RedisModule } from './redis';
 import { AuthModule } from './auth';
 
 @Module({
-  imports: [ConfigModule, AuditModule, DatabaseModule, AuthModule],
+  imports: [ConfigModule, AuditModule, DatabaseModule, RedisModule, AuthModule],
   controllers: [AppController],
   providers: [AppService],
 })
