@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SupabaseService } from '../database';
 import { AuditService } from '../audit';
+import { TokenService } from '../redis';
 import { EmailProvider } from './providers/email.provider';
 import { SmsProvider } from './providers/sms.provider';
 import { randomBytes } from 'crypto';
@@ -22,8 +22,8 @@ export class OtpService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly supabaseService: SupabaseService,
     private readonly auditService: AuditService,
+    private readonly tokenService: TokenService,
     private readonly emailProvider: EmailProvider,
     private readonly smsProvider: SmsProvider,
   ) {
@@ -60,38 +60,25 @@ export class OtpService {
     const sessionToken = this.generateSessionToken();
     const emailCode = this.generateCode();
     const phoneCode = this.generateCode();
-    const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
+    const ttlSeconds = this.expiryMinutes * 60;
 
-    const client = this.supabaseService.getClient();
-
-    // Store both codes in database
-    const { error } = await client.from('verification_codes').insert([
-      {
-        identifier: email,
-        identifier_type: 'email',
-        code: emailCode,
-        expires_at: expiresAt.toISOString(),
-        session_token: sessionToken,
-      },
-      {
-        identifier: phone,
-        identifier_type: 'phone',
-        code: phoneCode,
-        expires_at: expiresAt.toISOString(),
-        session_token: sessionToken,
-      },
+    // Store both codes in Redis
+    await Promise.all([
+      this.tokenService.storeOtp(
+        sessionToken,
+        email,
+        'email',
+        emailCode,
+        ttlSeconds,
+      ),
+      this.tokenService.storeOtp(
+        sessionToken,
+        phone,
+        'phone',
+        phoneCode,
+        ttlSeconds,
+      ),
     ]);
-
-    if (error) {
-      this.auditService.error(
-        'Failed to store verification codes',
-        'OtpService',
-        {
-          error: error.message,
-        },
-      );
-      throw new Error('Failed to initiate verification');
-    }
 
     // Send OTPs via providers
     await Promise.all([
@@ -116,18 +103,10 @@ export class OtpService {
     identifierType: 'email' | 'phone',
     code: string,
   ): Promise<boolean> {
-    const client = this.supabaseService.getClient();
+    // Get the OTP record from Redis
+    const record = await this.tokenService.getOtp(sessionToken, identifierType);
 
-    // Get the verification record
-    const { data: record, error: fetchError } = await client
-      .from('verification_codes')
-      .select('*')
-      .eq('session_token', sessionToken)
-      .eq('identifier', identifier)
-      .eq('identifier_type', identifierType)
-      .single();
-
-    if (fetchError || !record) {
+    if (!record) {
       this.auditService.warn('Verification record not found', 'OtpService', {
         sessionToken: sessionToken.slice(0, 8),
         identifier,
@@ -140,9 +119,11 @@ export class OtpService {
       return true;
     }
 
-    // Check if expired
-    if (new Date(record.expires_at) < new Date()) {
-      this.auditService.warn('OTP expired', 'OtpService', { identifier });
+    // Check if identifier matches
+    if (record.identifier !== identifier) {
+      this.auditService.warn('Identifier mismatch', 'OtpService', {
+        identifier,
+      });
       return false;
     }
 
@@ -155,10 +136,7 @@ export class OtpService {
     }
 
     // Increment attempts
-    await client
-      .from('verification_codes')
-      .update({ attempts: record.attempts + 1 })
-      .eq('id', record.id);
+    await this.tokenService.incrementOtpAttempts(sessionToken, identifierType);
 
     // Verify code
     if (record.code !== code) {
@@ -167,10 +145,7 @@ export class OtpService {
     }
 
     // Mark as verified
-    await client
-      .from('verification_codes')
-      .update({ verified: true })
-      .eq('id', record.id);
+    await this.tokenService.markOtpVerified(sessionToken, identifierType);
 
     this.auditService.success(
       `${identifierType} verified for session`,
@@ -185,30 +160,19 @@ export class OtpService {
   async isSessionFullyVerified(
     sessionToken: string,
   ): Promise<VerificationSession | null> {
-    const client = this.supabaseService.getClient();
+    const session =
+      await this.tokenService.isSessionFullyVerified(sessionToken);
 
-    const { data: records, error } = await client
-      .from('verification_codes')
-      .select('*')
-      .eq('session_token', sessionToken);
-
-    if (error || !records || records.length !== 2) {
-      return null;
-    }
-
-    const emailRecord = records.find((r) => r.identifier_type === 'email');
-    const phoneRecord = records.find((r) => r.identifier_type === 'phone');
-
-    if (!emailRecord || !phoneRecord) {
+    if (!session.email || !session.phone) {
       return null;
     }
 
     return {
       sessionToken,
-      email: emailRecord.identifier,
-      phone: phoneRecord.identifier,
-      emailVerified: emailRecord.verified,
-      phoneVerified: phoneRecord.verified,
+      email: session.email.identifier,
+      phone: session.phone.identifier,
+      emailVerified: session.email.verified,
+      phoneVerified: session.phone.verified,
     };
   }
 
@@ -216,10 +180,6 @@ export class OtpService {
    * Clean up verification records after successful auth
    */
   async cleanupSession(sessionToken: string): Promise<void> {
-    const client = this.supabaseService.getClient();
-    await client
-      .from('verification_codes')
-      .delete()
-      .eq('session_token', sessionToken);
+    await this.tokenService.deleteOtpSession(sessionToken);
   }
 }

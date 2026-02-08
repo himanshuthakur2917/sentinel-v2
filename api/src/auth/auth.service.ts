@@ -4,8 +4,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../database';
 import { AuditService } from '../audit';
@@ -26,7 +24,6 @@ const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
     private readonly supabaseService: SupabaseService,
     private readonly auditService: AuditService,
     private readonly otpService: OtpService,
@@ -146,13 +143,23 @@ export class AuthService {
     await this.otpService.cleanupSession(sessionToken);
 
     // Generate tokens
-    const tokens = await this.generateTokens(
+    const tokens = this.generateTokens(
       user as {
         id: string;
         email: string;
         phone_number: string;
         user_type: string;
       },
+    );
+
+    // Store refresh token in Redis
+    const decoded = this.jwtService.decode(tokens.refreshToken) as {
+      jti: string;
+    };
+    await this.tokenService.storeRefreshToken(
+      (user as { id: string }).id,
+      decoded.jti,
+      REFRESH_TOKEN_TTL,
     );
 
     this.auditService.success(
@@ -167,50 +174,33 @@ export class AuthService {
    */
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
     // Decode the refresh token to get user info
-    let decoded: JwtPayload;
+    let decoded: JwtPayload & { jti: string };
     try {
-      decoded = this.jwtService.verify(refreshToken) as JwtPayload;
+      decoded = this.jwtService.verify(refreshToken) as JwtPayload & {
+        jti: string;
+      };
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const tokenId = (decoded as JwtPayload & { jti?: string }).jti;
-    if (!tokenId) {
+    if (!decoded.jti) {
       throw new UnauthorizedException('Invalid refresh token format');
     }
 
-    // Check if token is valid in Redis (or fallback to database)
+    // Check if token is valid in Redis
     const isValid = await this.tokenService.isRefreshTokenValid(
       decoded.sub,
-      tokenId,
+      decoded.jti,
     );
     if (!isValid) {
-      // Check database as fallback
-      const client = this.supabaseService.getClient();
-      const { data: tokenRecord } = await client
-        .from('refresh_tokens')
-        .select('*')
-        .eq('id', tokenId)
-        .eq('revoked', false)
-        .single();
-
-      if (
-        !tokenRecord ||
-        new Date(tokenRecord.expires_at as string) < new Date()
-      ) {
-        throw new UnauthorizedException('Refresh token expired or revoked');
-      }
+      throw new UnauthorizedException('Refresh token expired or revoked');
     }
 
-    // Revoke old token in both Redis and database
-    await this.tokenService.revokeRefreshToken(decoded.sub, tokenId);
-    const client = this.supabaseService.getClient();
-    await client
-      .from('refresh_tokens')
-      .update({ revoked: true })
-      .eq('id', tokenId);
+    // Revoke old token
+    await this.tokenService.revokeRefreshToken(decoded.sub, decoded.jti);
 
     // Get user data for new tokens
+    const client = this.supabaseService.getClient();
     const { data: user, error } = await client
       .from('users')
       .select('id, email, phone_number, user_type')
@@ -222,13 +212,23 @@ export class AuthService {
     }
 
     // Generate new tokens
-    const tokens = await this.generateTokens(
+    const tokens = this.generateTokens(
       user as {
         id: string;
         email: string;
         phone_number: string;
         user_type: string;
       },
+    );
+
+    // Store new refresh token in Redis
+    const newDecoded = this.jwtService.decode(tokens.refreshToken) as {
+      jti: string;
+    };
+    await this.tokenService.storeRefreshToken(
+      decoded.sub,
+      newDecoded.jti,
+      REFRESH_TOKEN_TTL,
     );
 
     this.auditService.info(
@@ -239,14 +239,14 @@ export class AuthService {
   }
 
   /**
-   * Generate access and refresh tokens
+   * Generate access and refresh tokens (sync - no DB operations)
    */
-  private async generateTokens(user: {
+  private generateTokens(user: {
     id: string;
     email: string;
     phone_number: string;
     user_type: string;
-  }): Promise<AuthTokens> {
+  }): AuthTokens {
     const tokenId = randomUUID();
 
     const payload = {
@@ -254,7 +254,7 @@ export class AuthService {
       email: user.email,
       phone: user.phone_number,
       userType: user.user_type as JwtPayload['userType'],
-      jti: tokenId, // JWT ID for tracking
+      jti: tokenId,
     };
 
     // Access token (15 minutes)
@@ -265,25 +265,6 @@ export class AuthService {
       expiresIn: REFRESH_TOKEN_TTL,
     });
 
-    // Store in Redis with TTL
-    await this.tokenService.storeRefreshToken(
-      user.id,
-      tokenId,
-      REFRESH_TOKEN_TTL,
-    );
-
-    // Also store hash in database for persistence
-    const client = this.supabaseService.getClient();
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
-    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL * 1000);
-
-    await client.from('refresh_tokens').insert({
-      id: tokenId,
-      user_id: user.id,
-      token_hash: tokenHash,
-      expires_at: expiresAt.toISOString(),
-    });
-
     return { accessToken, refreshToken };
   }
 
@@ -291,16 +272,7 @@ export class AuthService {
    * Revoke all refresh tokens for a user (logout from all devices)
    */
   async revokeAllTokens(userId: string): Promise<void> {
-    // Revoke in Redis
     await this.tokenService.revokeAllUserTokens(userId);
-
-    // Revoke in database
-    const client = this.supabaseService.getClient();
-    await client
-      .from('refresh_tokens')
-      .update({ revoked: true })
-      .eq('user_id', userId);
-
     this.auditService.info(
       `All tokens revoked for user ${userId}`,
       'AuthService',
@@ -313,7 +285,7 @@ export class AuthService {
   async blacklistAccessToken(token: string): Promise<void> {
     try {
       const decoded = this.jwtService.verify(token) as JwtPayload & {
-        jti?: string;
+        jti: string;
       };
       if (decoded.jti) {
         await this.tokenService.blacklistAccessToken(
