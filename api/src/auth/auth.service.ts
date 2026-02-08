@@ -6,9 +6,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../database';
 import { AuditService } from '../audit';
 import { OtpService } from '../otp';
+import { TokenService } from '../redis';
 import { RegisterDto, OnboardingDto } from './dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -16,6 +18,9 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
+
+const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
+const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
 
 @Injectable()
 export class AuthService {
@@ -25,6 +30,7 @@ export class AuthService {
     private readonly supabaseService: SupabaseService,
     private readonly auditService: AuditService,
     private readonly otpService: OtpService,
+    private readonly tokenService: TokenService,
   ) {}
 
   /**
@@ -140,10 +146,17 @@ export class AuthService {
     await this.otpService.cleanupSession(sessionToken);
 
     // Generate tokens
-    const tokens = await this.generateTokens(user);
+    const tokens = await this.generateTokens(
+      user as {
+        id: string;
+        email: string;
+        phone_number: string;
+        user_type: string;
+      },
+    );
 
     this.auditService.success(
-      `User ${user.id} created and logged in`,
+      `User ${(user as { id: string }).id} created and logged in`,
       'AuthService',
     );
     return tokens;
@@ -153,39 +166,73 @@ export class AuthService {
    * Refresh access token using refresh token
    */
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
-    const client = this.supabaseService.getClient();
-
-    // Hash the refresh token to compare with stored hash
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
-
-    // Find the refresh token record
-    const { data: tokenRecord, error } = await client
-      .from('refresh_tokens')
-      .select('*, users(*)')
-      .eq('token_hash', tokenHash)
-      .eq('revoked', false)
-      .single();
-
-    if (error || !tokenRecord) {
+    // Decode the refresh token to get user info
+    let decoded: JwtPayload;
+    try {
+      decoded = this.jwtService.verify(refreshToken) as JwtPayload;
+    } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    // Check if expired
-    if (new Date(tokenRecord.expires_at) < new Date()) {
-      throw new UnauthorizedException('Refresh token expired');
+    const tokenId = (decoded as JwtPayload & { jti?: string }).jti;
+    if (!tokenId) {
+      throw new UnauthorizedException('Invalid refresh token format');
     }
 
-    // Revoke old token
+    // Check if token is valid in Redis (or fallback to database)
+    const isValid = await this.tokenService.isRefreshTokenValid(
+      decoded.sub,
+      tokenId,
+    );
+    if (!isValid) {
+      // Check database as fallback
+      const client = this.supabaseService.getClient();
+      const { data: tokenRecord } = await client
+        .from('refresh_tokens')
+        .select('*')
+        .eq('id', tokenId)
+        .eq('revoked', false)
+        .single();
+
+      if (
+        !tokenRecord ||
+        new Date(tokenRecord.expires_at as string) < new Date()
+      ) {
+        throw new UnauthorizedException('Refresh token expired or revoked');
+      }
+    }
+
+    // Revoke old token in both Redis and database
+    await this.tokenService.revokeRefreshToken(decoded.sub, tokenId);
+    const client = this.supabaseService.getClient();
     await client
       .from('refresh_tokens')
       .update({ revoked: true })
-      .eq('id', tokenRecord.id);
+      .eq('id', tokenId);
+
+    // Get user data for new tokens
+    const { data: user, error } = await client
+      .from('users')
+      .select('id, email, phone_number, user_type')
+      .eq('id', decoded.sub)
+      .single();
+
+    if (error || !user) {
+      throw new UnauthorizedException('User not found');
+    }
 
     // Generate new tokens
-    const tokens = await this.generateTokens(tokenRecord.users);
+    const tokens = await this.generateTokens(
+      user as {
+        id: string;
+        email: string;
+        phone_number: string;
+        user_type: string;
+      },
+    );
 
     this.auditService.info(
-      `Tokens refreshed for user ${tokenRecord.user_id}`,
+      `Tokens refreshed for user ${decoded.sub}`,
       'AuthService',
     );
     return tokens;
@@ -200,27 +247,38 @@ export class AuthService {
     phone_number: string;
     user_type: string;
   }): Promise<AuthTokens> {
+    const tokenId = randomUUID();
+
     const payload = {
       sub: user.id,
       email: user.email,
       phone: user.phone_number,
       userType: user.user_type as JwtPayload['userType'],
+      jti: tokenId, // JWT ID for tracking
     };
 
-    // Access token uses module default expiry (15m)
+    // Access token (15 minutes)
     const accessToken = this.jwtService.sign(payload);
 
-    // Refresh token uses longer expiry (7 days = 604800 seconds)
+    // Refresh token (7 days)
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: 604800,
+      expiresIn: REFRESH_TOKEN_TTL,
     });
 
-    // Store refresh token hash
+    // Store in Redis with TTL
+    await this.tokenService.storeRefreshToken(
+      user.id,
+      tokenId,
+      REFRESH_TOKEN_TTL,
+    );
+
+    // Also store hash in database for persistence
     const client = this.supabaseService.getClient();
     const tokenHash = await bcrypt.hash(refreshToken, 10);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL * 1000);
 
     await client.from('refresh_tokens').insert({
+      id: tokenId,
       user_id: user.id,
       token_hash: tokenHash,
       expires_at: expiresAt.toISOString(),
@@ -233,14 +291,38 @@ export class AuthService {
    * Revoke all refresh tokens for a user (logout from all devices)
    */
   async revokeAllTokens(userId: string): Promise<void> {
+    // Revoke in Redis
+    await this.tokenService.revokeAllUserTokens(userId);
+
+    // Revoke in database
     const client = this.supabaseService.getClient();
     await client
       .from('refresh_tokens')
       .update({ revoked: true })
       .eq('user_id', userId);
+
     this.auditService.info(
       `All tokens revoked for user ${userId}`,
       'AuthService',
     );
+  }
+
+  /**
+   * Blacklist an access token (for immediate invalidation)
+   */
+  async blacklistAccessToken(token: string): Promise<void> {
+    try {
+      const decoded = this.jwtService.verify(token) as JwtPayload & {
+        jti?: string;
+      };
+      if (decoded.jti) {
+        await this.tokenService.blacklistAccessToken(
+          decoded.jti,
+          ACCESS_TOKEN_TTL,
+        );
+      }
+    } catch {
+      // Token already expired, no need to blacklist
+    }
   }
 }
