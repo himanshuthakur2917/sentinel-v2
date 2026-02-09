@@ -22,6 +22,7 @@ export class SmsProvider {
     const authToken = this.configService.get<string>('otp.twilio.authToken');
     this.fromNumber = this.configService.get<string>('otp.twilio.phoneNumber');
 
+    // Check for missing credentials
     if (!accountSid || !authToken || !this.fromNumber) {
       this.auditService.warn(
         'Twilio credentials not configured. SMS OTPs will be logged to console only.',
@@ -30,8 +31,24 @@ export class SmsProvider {
       return;
     }
 
-    this.client = new Twilio(accountSid, authToken);
-    this.auditService.success('Twilio client initialized', 'SmsProvider');
+    // Validate accountSid format (must start with 'AC')
+    if (!accountSid.startsWith('AC')) {
+      this.auditService.warn(
+        'Invalid Twilio accountSid format (must start with "AC"). SMS OTPs will be logged to console only.',
+        'SmsProvider',
+      );
+      return;
+    }
+
+    try {
+      this.client = new Twilio(accountSid, authToken);
+      this.auditService.success('Twilio client initialized', 'SmsProvider');
+    } catch (error) {
+      this.auditService.warn(
+        `Failed to initialize Twilio client: ${(error as Error).message}. SMS OTPs will be logged to console only.`,
+        'SmsProvider',
+      );
+    }
   }
 
   async sendOtp(phone: string, code: string): Promise<boolean> {
