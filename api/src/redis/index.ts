@@ -1,2 +1,3 @@
-export { RedisModule, REDIS_CLIENT } from './redis.module';
+export { RedisModule } from './redis.module';
+export { REDIS_CLIENT } from './constants';
 export { TokenService } from './token.service';

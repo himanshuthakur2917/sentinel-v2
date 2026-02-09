@@ -3,8 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { AuditService } from '../audit';
 import { TokenService } from './token.service';
-
-export const REDIS_CLIENT = 'REDIS_CLIENT';
+import { REDIS_CLIENT } from './constants';
 
 @Global()
 @Module({
@@ -15,11 +14,12 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
         configService: ConfigService,
         auditService: AuditService,
       ) => {
-        const host = configService.get<string>('redis.host');
-        const port = configService.get<number>('redis.port');
+        const host = configService.get<string>('redis.host') || 'localhost';
+        const port = configService.get<number>('redis.port') || 6379;
         const password = configService.get<string>('redis.password');
-        const db = configService.get<number>('redis.db');
-        const keyPrefix = configService.get<string>('redis.keyPrefix');
+        const db = configService.get<number>('redis.db') ?? 0;
+        const keyPrefix =
+          configService.get<string>('redis.keyPrefix') || 'sentinel:';
 
         const client = new Redis({
           host,
