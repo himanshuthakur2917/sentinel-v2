@@ -27,6 +27,7 @@ import {
   COUNTRY_CODES,
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
+import { api } from "@/lib/api";
 
 interface PasswordRequirement {
   label: string;
@@ -76,37 +77,28 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/auth/register', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     email: formData.email,
-      //     phone: fullPhoneNumber,
-      //     password: formData.password,
-      //   }),
-      // });
-      // const data = await response.json();
-
-      // Simulate API response
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockData = {
-        sessionToken: "mock-session-token",
-        passwordHash: "mock-password-hash",
-      };
+      const response = await api.register({
+        email: formData.email,
+        phone: fullPhoneNumber,
+        password: formData.password,
+      });
 
       toast.success("Verification codes sent to email and phone");
 
       // Navigate to verification with session info
       const params = new URLSearchParams({
-        session: mockData.sessionToken,
+        session: response.sessionToken,
         email: formData.email,
         phone: fullPhoneNumber,
-        passwordHash: mockData.passwordHash,
+        passwordHash: response.passwordHash,
       });
       router.push(`/auth/verify?${params.toString()}`);
     } catch (error) {
-      toast.error("Registration failed. Please try again.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Registration failed. Please try again.",
+      );
     } finally {
       setLoading(false);
     }

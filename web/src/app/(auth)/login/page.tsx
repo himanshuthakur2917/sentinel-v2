@@ -28,6 +28,7 @@ import {
   COUNTRY_CODES,
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
+import { api } from "@/lib/api";
 
 type IdentifierType = "email" | "phone";
 
@@ -59,32 +60,22 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     [identifierType]: identifier,
-      //     password,
-      //   }),
-      // });
-      // const data = await response.json();
+      const response = await api.login({
+        [identifierType]: identifier,
+        password,
+      });
 
-      // Simulate API response
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockData = {
-        sessionToken: "mock-login-session",
-        identifier: identifier,
-        type: identifierType,
-      };
-
-      setSessionToken(mockData.sessionToken);
+      setSessionToken(response.sessionToken);
       setStep("otp");
 
       const destination = identifierType === "email" ? "email" : "phone";
       toast.success(`OTP sent to your ${destination}`);
     } catch (error) {
-      toast.error("Invalid credentials. Please try again.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Invalid credentials. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -100,26 +91,25 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/auth/login/verify', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     sessionToken,
-      //     [identifierType]: identifier,
-      //     identifierType,
-      //     code: otp,
-      //   }),
-      // });
-      // const data = await response.json();
+      const response = await api.verifyLogin({
+        sessionToken,
+        [identifierType]: identifier,
+        identifierType,
+        code: otp,
+      });
 
-      // Simulate API response
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Store tokens (in a real app, use secure token storage)
+      localStorage.setItem("accessToken", response.accessToken);
+      localStorage.setItem("refreshToken", response.refreshToken);
 
       toast.success("Login successful!");
       router.push("/dashboard");
     } catch (error) {
-      toast.error("Invalid OTP. Please try again.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Invalid OTP. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
