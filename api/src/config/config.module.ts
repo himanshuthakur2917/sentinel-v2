@@ -4,12 +4,13 @@ import databaseConfig from './database.config';
 import jwtConfig from './jwt.config';
 import otpConfig from './otp.config';
 import redisConfig from './redis.config';
+import pinoConfig from './pino.config';
 
 @Module({
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig, otpConfig, redisConfig],
+      load: [databaseConfig, jwtConfig, otpConfig, redisConfig, pinoConfig],
       envFilePath: ['.env.local', '.env'],
     }),
   ],

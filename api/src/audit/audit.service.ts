@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import {
-  LOG_LEVELS,
-  LogLevel,
-  COLORS,
-  LEVEL_COLORS,
-  LEVEL_LABELS,
-} from './constants/log-levels.constant';
+import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
+import { COLORS } from './constants/log-levels.constant';
 import {
   AuditLogEntry,
   RequestContext,
@@ -13,129 +8,93 @@ import {
 
 @Injectable()
 export class AuditService {
+  constructor(
+    @InjectPinoLogger(AuditService.name)
+    private readonly logger: PinoLogger,
+  ) {}
+
   /**
-   * Log a success message to the console
+   * Log a success message
    */
   success(
     message: string,
     context?: string,
     metadata?: Record<string, unknown>,
   ): void {
-    this.log(LOG_LEVELS.SUCCESS, message, context, metadata);
+    this.logger.info(
+      { context, ...metadata, level: 'success' },
+      `✓ ${message}`,
+    );
   }
 
   /**
-   * Log an info message to the console
+   * Log an info message
    */
   info(
     message: string,
     context?: string,
     metadata?: Record<string, unknown>,
   ): void {
-    this.log(LOG_LEVELS.INFO, message, context, metadata);
+    this.logger.info({ context, ...metadata }, `ℹ ${message}`);
   }
 
   /**
-   * Log a warning message to the console
+   * Log a warning message
    */
   warn(
     message: string,
     context?: string,
     metadata?: Record<string, unknown>,
   ): void {
-    this.log(LOG_LEVELS.WARNING, message, context, metadata);
+    this.logger.warn({ context, ...metadata }, `⚠ ${message}`);
   }
 
   /**
-   * Log an error message to the console
+   * Log an error message
    */
   error(
     message: string,
     context?: string,
     metadata?: Record<string, unknown>,
   ): void {
-    this.log(LOG_LEVELS.ERROR, message, context, metadata);
+    this.logger.error({ context, ...metadata }, `✗ ${message}`);
   }
 
   /**
-   * Log a debug message to the console
+   * Log a debug message
    */
   debug(
     message: string,
     context?: string,
     metadata?: Record<string, unknown>,
   ): void {
-    if (process.env.NODE_ENV === 'development') {
-      this.log(LOG_LEVELS.DEBUG, message, context, metadata);
-    }
+    this.logger.debug({ context, ...metadata }, `🔍 ${message}`);
   }
 
   /**
-   * Log HTTP request/response to the console
+   * Log HTTP request/response
    */
   logRequest(ctx: RequestContext): void {
     const { method, url, statusCode, duration, userId } = ctx;
-    const level = this.getLogLevelFromStatus(statusCode);
     const userInfo = userId ? ` [User: ${userId}]` : '';
     const message = `${method} ${url} - ${statusCode} (${duration}ms)${userInfo}`;
 
-    this.log(level, message, 'HTTP');
-  }
-
-  /**
-   * Core logging method with colored terminal output
-   */
-  private log(
-    level: LogLevel,
-    message: string,
-    context?: string,
-    metadata?: Record<string, unknown>,
-  ): void {
-    const timestamp = new Date().toISOString();
-    const color = LEVEL_COLORS[level];
-    const label = LEVEL_LABELS[level];
-    const contextStr = context
-      ? `${COLORS.cyan}[${context}]${COLORS.reset} `
-      : '';
-
-    // Format: [TIMESTAMP] [LEVEL] [CONTEXT] Message
-    const formattedLog = [
-      `${COLORS.gray}[${timestamp}]${COLORS.reset}`,
-      `${color}${COLORS.bright}${label}${COLORS.reset}`,
-      contextStr,
-      message,
-    ].join(' ');
-
-    console.log(formattedLog);
-
-    // Log metadata if present
-    if (metadata && Object.keys(metadata).length > 0) {
-      console.log(
-        `${COLORS.gray}  └─ ${JSON.stringify(metadata, null, 2).replace(/\n/g, '\n     ')}${COLORS.reset}`,
-      );
+    if (statusCode >= 500) {
+      this.logger.error({ context: 'HTTP', ...ctx }, message);
+    } else if (statusCode >= 400) {
+      this.logger.warn({ context: 'HTTP', ...ctx }, message);
+    } else {
+      this.logger.info({ context: 'HTTP', ...ctx }, message);
     }
-  }
-
-  /**
-   * Determine log level based on HTTP status code
-   */
-  private getLogLevelFromStatus(statusCode: number): LogLevel {
-    if (statusCode >= 500) return LOG_LEVELS.ERROR;
-    if (statusCode >= 400) return LOG_LEVELS.WARNING;
-    if (statusCode >= 200 && statusCode < 300) return LOG_LEVELS.SUCCESS;
-    return LOG_LEVELS.INFO;
   }
 
   /**
    * Persist audit log entry to database (placeholder for Supabase integration)
    */
   persistLog(entry: AuditLogEntry): void {
-    // TODO: Integrate with Supabase to persist critical logs
-    // This will be implemented in Phase 2 after database module is ready
-    this.debug(
+    this.logger.debug(
+      { context: 'AuditService', entry },
       'Audit log queued for persistence',
-      'AuditService',
-      JSON.parse(JSON.stringify(entry)) as Record<string, unknown>,
     );
   }
 

@@ -17,7 +17,8 @@ import { REDIS_CLIENT } from './constants';
         const host = configService.get<string>('redis.host') || 'localhost';
         const port = configService.get<number>('redis.port') || 6379;
         const password = configService.get<string>('redis.password');
-        const db = configService.get<number>('redis.db') ?? 0;
+        const rawDb = configService.get<number>('redis.db');
+        const db = rawDb !== undefined && !Number.isNaN(rawDb) ? rawDb : 0;
         const keyPrefix =
           configService.get<string>('redis.keyPrefix') || 'sentinel:';
 

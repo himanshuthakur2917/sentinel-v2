@@ -1,11 +1,15 @@
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AuditService } from './audit';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn'], // Reduce default NestJS logging (audit module handles it)
+    bufferLogs: true, // Buffer logs until Pino logger is ready
   });
+
+  // Use Pino logger for all NestJS logging
+  app.useLogger(app.get(Logger));
 
   const auditService = app.get(AuditService);
   const port = process.env.PORT || 3000;
