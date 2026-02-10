@@ -14,6 +14,13 @@ export interface VerificationSession {
   phoneVerified: boolean;
 }
 
+export interface LoginVerificationSession {
+  sessionToken: string;
+  identifier: string;
+  type: 'email' | 'phone';
+  verified: boolean;
+}
+
 @Injectable()
 export class OtpService {
   private readonly codeLength: number;
@@ -88,6 +95,48 @@ export class OtpService {
 
     this.auditService.success(
       `Dual OTP sent for session ${sessionToken.slice(0, 8)}...`,
+      'OtpService',
+    );
+
+    return sessionToken;
+  }
+
+  /**
+   * Send login OTP to a single identifier (email or phone)
+   * @param identifier - Email or phone number
+   * @param type - Type of identifier
+   * @param customTtlSeconds - Optional custom TTL in seconds (default: expiryMinutes * 60)
+   */
+  async sendLoginOtp(
+    identifier: string,
+    type: 'email' | 'phone',
+    customTtlSeconds?: number,
+  ): Promise<string> {
+    const sessionToken = this.generateSessionToken();
+    const code = this.generateCode();
+    const ttlSeconds = customTtlSeconds ?? this.expiryMinutes * 60;
+
+    // Store code in Redis
+    await this.tokenService.storeOtp(
+      sessionToken,
+      identifier,
+      type,
+      code,
+      ttlSeconds,
+    );
+
+    // Send OTP via provider
+    if (type === 'email') {
+      await this.emailProvider.sendOtp(identifier, code);
+    } else {
+      await this.smsProvider.sendOtp(identifier, code);
+    }
+
+    this.auditService.success(
+      `Login OTP sent to ${identifier} (TTL: ${ttlSeconds}s) for session ${sessionToken.slice(
+        0,
+        8,
+      )}...`,
       'OtpService',
     );
 
@@ -174,6 +223,28 @@ export class OtpService {
       emailVerified: session.email.verified,
       phoneVerified: session.phone.verified,
     };
+  }
+
+  /**
+   * Check if login OTP is verified for a session
+   */
+  async isLoginVerified(
+    sessionToken: string,
+    type: 'email' | 'phone',
+  ): Promise<boolean> {
+    const record = await this.tokenService.getOtp(sessionToken, type);
+    return !!record?.verified;
+  }
+
+  /**
+   * Get identifier from session
+   */
+  async getSessionIdentifier(
+    sessionToken: string,
+    type: 'email' | 'phone',
+  ): Promise<string | null> {
+    const record = await this.tokenService.getOtp(sessionToken, type);
+    return record ? record.identifier : null;
   }
 
   /**

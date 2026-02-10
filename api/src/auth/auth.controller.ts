@@ -5,6 +5,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Session,
 } from '@nestjs/common';
 import { AuthService, AuthTokens } from './auth.service';
 import {
@@ -12,11 +13,18 @@ import {
   VerifyOtpDto,
   OnboardingDto,
   RefreshTokenDto,
+  LoginDto,
+  VerifyLoginDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuditLog } from '../audit';
+
+// Extended onboarding DTO that includes password hash from registration
+interface OnboardingWithPasswordDto extends OnboardingDto {
+  passwordHash: string;
+}
 
 @Controller('auth')
 export class AuthController {
@@ -25,16 +33,53 @@ export class AuthController {
   /**
    * POST /auth/register
    * Initiate registration by sending OTPs to email and phone
+   * Returns sessionToken and passwordHash for use in onboarding
    */
   @Post('register')
   @AuditLog({ action: 'REGISTER_INITIATE', resource: 'auth', persist: true })
-  async register(@Body() dto: RegisterDto): Promise<{ sessionToken: string }> {
+  async register(
+    @Body() dto: RegisterDto,
+  ): Promise<{ sessionToken: string; passwordHash: string }> {
     return this.authService.register(dto);
   }
 
   /**
+   * POST /auth/login
+   * Validate credentials and send OTP to email/phone
+   * Returns sessionToken, identifier used, and type
+   */
+  @Post('login')
+  @AuditLog({ action: 'LOGIN_INITIATE', resource: 'auth', persist: true })
+  async login(
+    @Body() dto: LoginDto,
+  ): Promise<{
+    sessionToken: string;
+    identifier: string;
+    type: 'email' | 'phone';
+  }> {
+    return this.authService.login(dto);
+  }
+
+  /**
+   * POST /auth/login/verify
+   * Verify login OTP and get tokens
+   */
+  @Post('login/verify')
+  @HttpCode(HttpStatus.OK)
+  @AuditLog({ action: 'LOGIN_VERIFY', resource: 'auth', persist: true })
+  async verifyLogin(@Body() dto: VerifyLoginDto): Promise<AuthTokens> {
+    const identifier = dto.email || dto.phone!;
+    return this.authService.verifyLogin(
+      dto.sessionToken,
+      identifier,
+      dto.identifierType,
+      dto.code,
+    );
+  }
+
+  /**
    * POST /auth/verify-otp
-   * Verify a single OTP (email or phone)
+   * Verify a single OTP (email or phone) during registration
    */
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
@@ -53,10 +98,13 @@ export class AuthController {
   /**
    * POST /auth/onboarding
    * Complete user onboarding after both OTPs verified
+   * Requires passwordHash from registration step
    */
   @Post('onboarding')
   @AuditLog({ action: 'ONBOARDING_COMPLETE', resource: 'auth', persist: true })
-  async onboarding(@Body() dto: OnboardingDto): Promise<AuthTokens> {
+  async onboarding(
+    @Body() dto: OnboardingWithPasswordDto,
+  ): Promise<AuthTokens> {
     return this.authService.completeOnboarding(dto);
   }
 
