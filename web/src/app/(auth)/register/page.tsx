@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ import {
   COUNTRY_CODES,
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
-import { api } from "@/lib/api";
+import { authApi } from "@/lib/api";
 
 interface PasswordRequirement {
   label: string;
@@ -43,7 +44,6 @@ const passwordRequirements: PasswordRequirement[] = [
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE);
@@ -52,6 +52,23 @@ export default function RegisterPage() {
     phoneNumber: "",
     password: "",
     confirmPassword: "",
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: authApi.register,
+    onSuccess: (data) => {
+      toast.success("Verification codes sent to email and phone");
+      const params = new URLSearchParams({
+        session: data.sessionToken,
+        email: formData.email,
+        phone: fullPhoneNumber,
+        passwordHash: data.passwordHash,
+      });
+      router.push(`/auth/verify?${params.toString()}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Registration failed. Please try again.");
+    },
   });
 
   const fullPhoneNumber = `${countryCode}${formData.phoneNumber}`;
@@ -75,33 +92,11 @@ export default function RegisterPage() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const response = await api.register({
-        email: formData.email,
-        phone: fullPhoneNumber,
-        password: formData.password,
-      });
-
-      toast.success("Verification codes sent to email and phone");
-
-      // Navigate to verification with session info
-      const params = new URLSearchParams({
-        session: response.sessionToken,
-        email: formData.email,
-        phone: fullPhoneNumber,
-        passwordHash: response.passwordHash,
-      });
-      router.push(`/auth/verify?${params.toString()}`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Registration failed. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    registerMutation.mutate({
+      email: formData.email,
+      phone: fullPhoneNumber,
+      password: formData.password,
+    });
   };
 
   return (
@@ -275,9 +270,11 @@ export default function RegisterPage() {
             <Button
               className="w-full"
               type="submit"
-              disabled={loading || !isFormValid}
+              disabled={registerMutation.isPending || !isFormValid}
             >
-              {loading ? "Creating account..." : "Create Account"}
+              {registerMutation.isPending
+                ? "Creating account..."
+                : "Create Account"}
             </Button>
           </form>
         </CardContent>
