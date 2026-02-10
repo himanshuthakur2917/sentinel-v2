@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,7 @@ import {
   COUNTRY_CODES,
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
-import { api } from "@/lib/api";
+import { authApi } from "@/lib/api";
 
 type IdentifierType = "email" | "phone";
 
@@ -42,15 +43,40 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
-  const [loading, setLoading] = useState(false);
   const [sessionToken, setSessionToken] = useState("");
+
+  const loginMutation = useMutation({
+    mutationFn: authApi.login,
+    onSuccess: (data) => {
+      setSessionToken(data.sessionToken);
+      setStep("otp");
+      const destination = identifierType === "email" ? "email" : "phone";
+      toast.success(`OTP sent to your ${destination}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Invalid credentials. Please try again.");
+    },
+  });
+
+  const verifyLoginMutation = useMutation({
+    mutationFn: authApi.verifyLogin,
+    onSuccess: (data) => {
+      localStorage.setItem("accessToken", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+      toast.success("Login successful!");
+      router.push("/dashboard");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Invalid OTP. Please try again.");
+    },
+  });
 
   const fullPhoneNumber = `${countryCode}${phoneNumber}`;
   const identifier = identifierType === "email" ? email : fullPhoneNumber;
   const isFormValid =
     identifierType === "email" ? email && password : phoneNumber && password;
 
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+  const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isFormValid) {
@@ -58,30 +84,13 @@ export default function LoginPage() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const response = await api.login({
-        [identifierType]: identifier,
-        password,
-      });
-
-      setSessionToken(response.sessionToken);
-      setStep("otp");
-
-      const destination = identifierType === "email" ? "email" : "phone";
-      toast.success(`OTP sent to your ${destination}`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Invalid credentials. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    loginMutation.mutate({
+      [identifierType]: identifier,
+      password,
+    });
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
+  const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (otp.length !== 6) {
@@ -89,30 +98,12 @@ export default function LoginPage() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const response = await api.verifyLogin({
-        sessionToken,
-        [identifierType]: identifier,
-        identifierType,
-        code: otp,
-      });
-
-      // Store tokens (in a real app, use secure token storage)
-      localStorage.setItem("accessToken", response.accessToken);
-      localStorage.setItem("refreshToken", response.refreshToken);
-
-      toast.success("Login successful!");
-      router.push("/dashboard");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Invalid OTP. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    verifyLoginMutation.mutate({
+      sessionToken,
+      [identifierType]: identifier,
+      identifierType,
+      code: otp,
+    });
   };
 
   const resendOtp = async () => {
@@ -257,9 +248,9 @@ export default function LoginPage() {
               <Button
                 className="w-full"
                 type="submit"
-                disabled={loading || !isFormValid}
+                disabled={loginMutation.isPending || !isFormValid}
               >
-                {loading ? "Verifying..." : "Sign In"}
+                {loginMutation.isPending ? "Verifying..." : "Sign In"}
               </Button>
             </form>
           ) : (
@@ -288,9 +279,11 @@ export default function LoginPage() {
               <Button
                 className="w-full"
                 type="submit"
-                disabled={loading || otp.length !== 6}
+                disabled={verifyLoginMutation.isPending || otp.length !== 6}
               >
-                {loading ? "Verifying..." : "Verify & Sign In"}
+                {verifyLoginMutation.isPending
+                  ? "Verifying..."
+                  : "Verify & Sign In"}
               </Button>
 
               <div className="flex items-center justify-between">
