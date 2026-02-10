@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { api } from "@/lib/api";
+import { authApi } from "@/lib/api";
 
 export default function VerifyPage() {
   const router = useRouter();
@@ -23,79 +24,23 @@ export default function VerifyPage() {
 
   const [emailOtp, setEmailOtp] = useState("");
   const [phoneOtp, setPhoneOtp] = useState("");
-  const [loading, setLoading] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
   const sessionToken = searchParams.get("session");
   const passwordHash = searchParams.get("passwordHash");
 
-  useEffect(() => {
-    if (!email || !phone || !sessionToken) {
-      router.push("/auth/register");
-    }
-  }, [email, phone, sessionToken, router]);
-
-  const verifyCode = async (
-    identifier: string,
-    identifierType: "email" | "phone",
-    code: string,
-  ): Promise<{ verified: boolean; fullyVerified: boolean }> => {
-    if (!sessionToken) {
-      toast.error("Invalid session");
-      throw new Error("Invalid session");
-    }
-
-    try {
-      const response = await api.verifyOtp({
-        sessionToken,
-        identifier,
-        identifierType,
-        code,
-      });
-
-      if (response.verified) {
-        if (identifierType === "email") {
-          setEmailVerified(true);
-        } else {
-          setPhoneVerified(true);
-        }
-      }
-
-      return response;
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const handleVerifyEmail = async () => {
-    if (!email || emailOtp.length !== 6) return;
-
-    try {
-      setLoading(true);
-      const result = await verifyCode(email, "email", emailOtp);
-      if (result.verified) {
+  const verifyMutation = useMutation({
+    mutationFn: authApi.verifyOtp,
+    onSuccess: (data, variables) => {
+      if (variables.identifierType === "email") {
+        setEmailVerified(true);
         toast.success("Email verified successfully");
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Email verification failed",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyPhone = async () => {
-    if (!phone || phoneOtp.length !== 6) return;
-
-    try {
-      setLoading(true);
-      const result = await verifyCode(phone, "phone", phoneOtp);
-      if (result.verified) {
+      } else {
+        setPhoneVerified(true);
         toast.success("Phone verified successfully");
 
         // If both are verified, proceed to onboarding
-        if (emailVerified && result.fullyVerified) {
+        if (emailVerified && data.fullyVerified) {
           const params = new URLSearchParams({
             session: sessionToken!,
             passwordHash: passwordHash || "",
@@ -103,13 +48,37 @@ export default function VerifyPage() {
           router.push(`/onboarding?${params.toString()}`);
         }
       }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Phone verification failed",
-      );
-    } finally {
-      setLoading(false);
+    },
+    onError: (error: Error, variables) => {
+      const type = variables.identifierType === "email" ? "Email" : "Phone";
+      toast.error(`${type} verification failed: ${error.message}`);
+    },
+  });
+
+  useEffect(() => {
+    if (!email || !phone || !sessionToken) {
+      router.push("/auth/register");
     }
+  }, [email, phone, sessionToken, router]);
+
+  const handleVerifyEmail = () => {
+    if (!email || !sessionToken || emailOtp.length !== 6) return;
+    verifyMutation.mutate({
+      sessionToken,
+      identifier: email,
+      identifierType: "email",
+      code: emailOtp,
+    });
+  };
+
+  const handleVerifyPhone = () => {
+    if (!phone || !sessionToken || phoneOtp.length !== 6) return;
+    verifyMutation.mutate({
+      sessionToken,
+      identifier: phone,
+      identifierType: "phone",
+      code: phoneOtp,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,12 +86,12 @@ export default function VerifyPage() {
 
     // Verify email first if not verified
     if (!emailVerified && emailOtp.length === 6) {
-      await handleVerifyEmail();
+      handleVerifyEmail();
     }
 
     // Verify phone if not verified
     if (!phoneVerified && phoneOtp.length === 6) {
-      await handleVerifyPhone();
+      handleVerifyPhone();
     }
   };
 
@@ -149,19 +118,23 @@ export default function VerifyPage() {
                   required
                   value={emailOtp}
                   onChange={(e) => setEmailOtp(e.target.value)}
-                  disabled={loading || emailVerified}
+                  disabled={verifyMutation.isPending || emailVerified}
                   className="text-center tracking-widest"
                   maxLength={6}
                 />
                 <Button
                   type="button"
                   onClick={handleVerifyEmail}
-                  disabled={loading || emailVerified || emailOtp.length !== 6}
+                  disabled={
+                    verifyMutation.isPending ||
+                    emailVerified ||
+                    emailOtp.length !== 6
+                  }
                   className="min-w-24"
                 >
                   {emailVerified
                     ? "Verified ✓"
-                    : loading
+                    : verifyMutation.isPending
                       ? "Verifying..."
                       : "Verify"}
                 </Button>
@@ -177,19 +150,23 @@ export default function VerifyPage() {
                   required
                   value={phoneOtp}
                   onChange={(e) => setPhoneOtp(e.target.value)}
-                  disabled={loading || phoneVerified}
+                  disabled={verifyMutation.isPending || phoneVerified}
                   className="text-center tracking-widest"
                   maxLength={6}
                 />
                 <Button
                   type="button"
                   onClick={handleVerifyPhone}
-                  disabled={loading || phoneVerified || phoneOtp.length !== 6}
+                  disabled={
+                    verifyMutation.isPending ||
+                    phoneVerified ||
+                    phoneOtp.length !== 6
+                  }
                   className="min-w-24"
                 >
                   {phoneVerified
                     ? "Verified ✓"
-                    : loading
+                    : verifyMutation.isPending
                       ? "Verifying..."
                       : "Verify"}
                 </Button>
