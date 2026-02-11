@@ -1,4 +1,12 @@
 packages:
-  - "api"
-  - "web"
-  - "packages/*"
+  - api
+  - web
+  - packages/*
+
+ignoredBuiltDependencies:
+  - supabase
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - bcrypt
+  - sharp

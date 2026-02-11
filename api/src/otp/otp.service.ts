@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit';
 import { TokenService } from '../redis';
@@ -63,11 +63,15 @@ export class OtpService {
   /**
    * Send OTP to both email and phone, creating a verification session
    */
-  async sendDualOtp(email: string, phone: string): Promise<string> {
+  async sendDualOtp(
+    email: string,
+    phone: string,
+  ): Promise<{ sessionToken: string; expiresAt: string }> {
     const sessionToken = this.generateSessionToken();
     const emailCode = this.generateCode();
     const phoneCode = this.generateCode();
     const ttlSeconds = this.expiryMinutes * 60;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
     // Store both codes in Redis
     await Promise.all([
@@ -93,12 +97,21 @@ export class OtpService {
       this.smsProvider.sendOtp(phone, phoneCode),
     ]);
 
+    // Log OTP codes for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n🔐 OTP CODES (Development Only):');
+      console.log(`📧 Email (${email}): ${emailCode}`);
+      console.log(`📱 Phone (${phone}): ${phoneCode}`);
+      console.log(`🎫 Session: ${sessionToken.slice(0, 16)}...`);
+      console.log(`⏱️  Expires: ${expiresAt}\n`);
+    }
+
     this.auditService.success(
       `Dual OTP sent for session ${sessionToken.slice(0, 8)}...`,
       'OtpService',
     );
 
-    return sessionToken;
+    return { sessionToken, expiresAt };
   }
 
   /**
@@ -111,10 +124,11 @@ export class OtpService {
     identifier: string,
     type: 'email' | 'phone',
     customTtlSeconds?: number,
-  ): Promise<string> {
+  ): Promise<{ sessionToken: string; expiresAt: string }> {
     const sessionToken = this.generateSessionToken();
     const code = this.generateCode();
     const ttlSeconds = customTtlSeconds ?? this.expiryMinutes * 60;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
     // Store code in Redis
     await this.tokenService.storeOtp(
@@ -132,6 +146,16 @@ export class OtpService {
       await this.smsProvider.sendOtp(identifier, code);
     }
 
+    // Log OTP code for development
+    if (process.env.NODE_ENV === 'development') {
+      const icon = type === 'email' ? '📧' : '📱';
+      console.log('\n🔐 LOGIN OTP CODE (Development Only):');
+      console.log(`${icon} ${type.toUpperCase()} (${identifier}): ${code}`);
+      console.log(`🎫 Session: ${sessionToken.slice(0, 16)}...`);
+      console.log(`⏱️  TTL: ${ttlSeconds}s`);
+      console.log(`⏱️  Expires: ${expiresAt}\n`);
+    }
+
     this.auditService.success(
       `Login OTP sent to ${identifier} (TTL: ${ttlSeconds}s) for session ${sessionToken.slice(
         0,
@@ -140,7 +164,7 @@ export class OtpService {
       'OtpService',
     );
 
-    return sessionToken;
+    return { sessionToken, expiresAt };
   }
 
   /**
@@ -157,7 +181,7 @@ export class OtpService {
 
     if (!record) {
       this.auditService.warn('Verification record not found', 'OtpService', {
-        sessionToken: sessionToken.slice(0, 8),
+        sessionToken: sessionToken?.slice(0, 8),
         identifier,
       });
       return false;
@@ -234,6 +258,61 @@ export class OtpService {
   ): Promise<boolean> {
     const record = await this.tokenService.getOtp(sessionToken, type);
     return !!record?.verified;
+  }
+
+  /**
+   * Resend OTP for a specific identifier in an existing session
+   * @param sessionToken - Session token
+   * @param identifierType - Type of identifier (email or phone)
+   * @returns New expiry timestamp
+   */
+  async resendOtp(
+    sessionToken: string,
+    identifierType: 'email' | 'phone',
+    identifier: string,
+  ): Promise<{ success: boolean; expiresAt: string }> {
+    // Get the existing session record to retrieve the identifier
+    this.auditService.info('Resending OTP', 'OtpService', {
+      sessionToken: sessionToken?.slice(0, 8),
+      identifierType,
+    });
+
+    const code = this.generateCode();
+    const ttlSeconds = this.expiryMinutes * 60;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+    await this.tokenService.storeOtp(
+      sessionToken,
+      identifier,
+      identifierType,
+      code,
+      ttlSeconds,
+    );
+
+    // Send new OTP via provider
+    if (identifierType === 'email') {
+      await this.emailProvider.sendOtp(identifier, code);
+    } else {
+      await this.smsProvider.sendOtp(identifier, code);
+    }
+
+    // Log for development
+    if (process.env.NODE_ENV === 'development') {
+      const icon = identifierType === 'email' ? '📧' : '📱';
+      console.log('\n🔄 RESEND OTP (Development Only):');
+      console.log(
+        `${icon} ${identifierType.toUpperCase()} (${identifier}): ${code}`,
+      );
+      console.log(`🎫 Session: ${sessionToken.slice(0, 16)}...`);
+      console.log(`⏱️  Expires: ${expiresAt}\n`);
+    }
+
+    this.auditService.success(
+      `OTP resent to ${identifier} for session ${sessionToken.slice(0, 8)}...`,
+      'OtpService',
+    );
+
+    return { success: true, expiresAt };
   }
 
   /**

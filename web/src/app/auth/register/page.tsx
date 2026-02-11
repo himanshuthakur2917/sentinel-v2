@@ -28,7 +28,7 @@ import {
   COUNTRY_CODES,
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
-import { authApi } from "@/lib/api";
+import { authApi } from "@/lib/api/auth.api";
 
 interface PasswordRequirement {
   label: string;
@@ -63,6 +63,7 @@ export default function RegisterPage() {
         email: formData.email,
         phone: fullPhoneNumber,
         passwordHash: data.passwordHash,
+        expiresAt: data.expiresAt,
       });
       router.push(`/auth/verify?${params.toString()}`);
     },
@@ -123,7 +124,7 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                disabled={loading}
+                disabled={registerMutation.isPending}
               />
             </div>
 
@@ -133,7 +134,7 @@ export default function RegisterPage() {
                 <Select
                   value={countryCode}
                   onValueChange={setCountryCode}
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                 >
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Code" />
@@ -160,7 +161,7 @@ export default function RegisterPage() {
                     const value = e.target.value.replace(/\D/g, "");
                     setFormData({ ...formData, phoneNumber: value });
                   }}
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                   className="flex-1"
                 />
               </div>
@@ -178,7 +179,7 @@ export default function RegisterPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                   className="pr-10"
                 />
                 <Button
@@ -187,7 +188,7 @@ export default function RegisterPage() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -237,7 +238,7 @@ export default function RegisterPage() {
                       confirmPassword: e.target.value,
                     })
                   }
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                   className="pr-10"
                 />
                 <Button
@@ -246,7 +247,7 @@ export default function RegisterPage() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading}
+                  disabled={registerMutation.isPending}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />

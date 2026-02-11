@@ -44,6 +44,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
   const [sessionToken, setSessionToken] = useState("");
+  const [loading, setLoading] = useState(false);
+
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
@@ -105,6 +107,7 @@ export default function LoginPage() {
       code: otp,
     });
   };
+
 
   const resendOtp = async () => {
     setLoading(true);

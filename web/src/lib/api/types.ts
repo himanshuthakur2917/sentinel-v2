@@ -23,6 +23,7 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   sessionToken: string;
   passwordHash: string;
+  expiresAt: string;
 }
 
 export interface VerifyOtpRequest {
@@ -47,6 +48,7 @@ export interface LoginResponse {
   sessionToken: string;
   identifier: string;
   type: "email" | "phone";
+  expiresAt: string;
 }
 
 export interface VerifyLoginRequest {
@@ -73,4 +75,15 @@ export interface CurrentUser {
   email: string;
   phone: string;
   userType: string;
+}
+
+export interface ResendOtpRequest {
+  sessionToken: string;
+  identifierType: "email" | "phone";
+  identifier: string;
+}
+
+export interface ResendOtpResponse {
+  success: boolean;
+  expiresAt: string;
 }

@@ -5,7 +5,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Session,
 } from '@nestjs/common';
 import { AuthService, AuthTokens } from './auth.service';
 import {
@@ -15,6 +14,7 @@ import {
   RefreshTokenDto,
   LoginDto,
   VerifyLoginDto,
+  ResendOtpDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -33,7 +33,7 @@ export class AuthController {
   /**
    * POST /auth/register
    * Initiate registration by sending OTPs to email and phone
-   * Returns sessionToken and passwordHash for use in onboarding
+   * Returns.sessionToken and passwordHash for use in onboarding
    */
   @Post('register')
   @AuditLog({ action: 'REGISTER_INITIATE', resource: 'auth', persist: true })
@@ -46,13 +46,11 @@ export class AuthController {
   /**
    * POST /auth/login
    * Validate credentials and send OTP to email/phone
-   * Returns sessionToken, identifier used, and type
+   * Returns.sessionToken, identifier used, and type
    */
   @Post('login')
   @AuditLog({ action: 'LOGIN_INITIATE', resource: 'auth', persist: true })
-  async login(
-    @Body() dto: LoginDto,
-  ): Promise<{
+  async login(@Body() dto: LoginDto): Promise<{
     sessionToken: string;
     identifier: string;
     type: 'email' | 'phone';
@@ -116,6 +114,44 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(@Body() dto: RefreshTokenDto): Promise<AuthTokens> {
     return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  /**
+   * POST /auth/resend-registration-otp
+   * Resend OTP during registration verification
+   */
+  @Post('resend-registration-otp')
+  @HttpCode(HttpStatus.OK)
+  @AuditLog({
+    action: 'RESEND_REGISTRATION_OTP',
+    resource: 'auth',
+    persist: true,
+  })
+  async resendRegistrationOtp(
+    @Body() dto: ResendOtpDto,
+  ): Promise<{ success: boolean; expiresAt: string }> {
+    return this.authService.resendRegistrationOtp(
+      dto.sessionToken,
+      dto.identifierType,
+      dto.identifier,
+    );
+  }
+
+  /**
+   * POST /auth/resend-login-otp
+   * Resend OTP during login verification
+   */
+  @Post('resend-login-otp')
+  @HttpCode(HttpStatus.OK)
+  @AuditLog({ action: 'RESEND_LOGIN_OTP', resource: 'auth', persist: true })
+  async resendLoginOtp(
+    @Body() dto: ResendOtpDto,
+  ): Promise<{ success: boolean; expiresAt: string }> {
+    return this.authService.resendLoginOtp(
+      dto.sessionToken,
+      dto.identifierType,
+      dto.identifier,
+    );
   }
 
   /**

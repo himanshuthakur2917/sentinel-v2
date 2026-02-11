@@ -36,9 +36,11 @@ export class AuthService {
    * Step 1: Initiate registration - validate & send OTP to both email and phone
    * Password is stored after OTP verification in completeOnboarding
    */
-  async register(
-    dto: RegisterDto,
-  ): Promise<{ sessionToken: string; passwordHash: string }> {
+  async register(dto: RegisterDto): Promise<{
+    sessionToken: string;
+    passwordHash: string;
+    expiresAt: string;
+  }> {
     const { email, phone, password } = dto;
 
     // Check if user already exists
@@ -59,13 +61,16 @@ export class AuthService {
     const passwordHash = await hashPassword(password);
 
     // Send dual OTP
-    const sessionToken = await this.otpService.sendDualOtp(email, phone);
+    const { sessionToken, expiresAt } = await this.otpService.sendDualOtp(
+      email,
+      phone,
+    );
 
     this.auditService.info(
       `Registration initiated for ${email}`,
       'AuthService',
     );
-    return { sessionToken, passwordHash };
+    return { sessionToken, passwordHash, expiresAt };
   }
 
   /**
@@ -75,6 +80,7 @@ export class AuthService {
     sessionToken: string;
     identifier: string;
     type: 'email' | 'phone';
+    expiresAt: string;
   }> {
     const { email, phone, password } = dto;
 
@@ -122,7 +128,7 @@ export class AuthService {
     }
 
     // Send login OTP to the same identifier type used
-    const sessionToken = await this.otpService.sendLoginOtp(
+    const { sessionToken, expiresAt } = await this.otpService.sendLoginOtp(
       identifier,
       identifierType,
       OTP_SESSION_TTL,
@@ -132,7 +138,7 @@ export class AuthService {
       `Login initiated for ${identifier} (password verified)`,
       'AuthService',
     );
-    return { sessionToken, identifier, type: identifierType };
+    return { sessionToken, identifier, type: identifierType, expiresAt };
   }
 
   /**
@@ -461,6 +467,28 @@ export class AuthService {
     } catch {
       // Token already expired, no need to blacklist
     }
+  }
+
+  /**
+   * Resend OTP during registration verification
+   */
+  async resendRegistrationOtp(
+    sessionToken: string,
+    identifierType: 'email' | 'phone',
+    identifier: string,
+  ): Promise<{ success: boolean; expiresAt: string }> {
+    return this.otpService.resendOtp(sessionToken, identifierType, identifier);
+  }
+
+  /**
+   * Resend OTP during login verification
+   */
+  async resendLoginOtp(
+    sessionToken: string,
+    identifierType: 'email' | 'phone',
+    identifier: string,
+  ): Promise<{ success: boolean; expiresAt: string }> {
+    return this.otpService.resendOtp(sessionToken, identifierType, identifier);
   }
 
   // TODO: Implement forgot password flow

@@ -150,6 +150,12 @@ export class TokenService {
 
     const key = `otp:${sessionToken}:${type}`;
     const data = await this.redis.get(key);
+
+    this.auditService.debug(
+      `Retrieved OTP for session ${sessionToken} , data : ${data}`,
+      'TokenService',
+    );
+
     return data ? JSON.parse(data) : null;
   }
 

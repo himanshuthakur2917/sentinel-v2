@@ -10,11 +10,10 @@ import type {
   AuthTokens,
   OnboardingRequest,
   CurrentUser,
+  ResendOtpRequest,
+  ResendOtpResponse,
 } from "./types";
 
-/**
- * Auth API functions
- */
 export const authApi = {
   /**
    * Register a new user - sends OTP to email and phone
@@ -74,5 +73,26 @@ export const authApi = {
     return httpClient.post<CurrentUser>("/auth/me", undefined, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+  },
+
+  /**
+   * Resend OTP during registration verification
+   */
+  resendRegistrationOtp: async (
+    data: ResendOtpRequest,
+  ): Promise<ResendOtpResponse> => {
+    return httpClient.post<ResendOtpResponse>(
+      "/auth/resend-registration-otp",
+      data,
+    );
+  },
+
+  /**
+   * Resend OTP during login verification
+   */
+  resendLoginOtp: async (
+    data: ResendOtpRequest,
+  ): Promise<ResendOtpResponse> => {
+    return httpClient.post<ResendOtpResponse>("/auth/resend-login-otp", data);
   },
 };
