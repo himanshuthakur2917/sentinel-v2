@@ -1,7 +1,7 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('otp', () => ({
-  expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES || '5', 10),
+  expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES || '2', 10),
   maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || '3', 10),
   codeLength: 6,
 

@@ -7,7 +7,7 @@ import {
   HttpStatus,
   Res,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { AuthService, AuthTokens } from './auth.service';
 import {
   RegisterDto,
@@ -183,7 +183,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
     await this.authService.revokeAllTokens(userId);
-    
+
     // Clear cookies
     response.clearCookie('accessToken');
     response.clearCookie('refreshToken');
@@ -206,7 +206,7 @@ export class AuthController {
   // Helper to set cookies
   private setAuthCookies(response: Response, tokens: AuthTokens) {
     const isProd = process.env.NODE_ENV === 'production';
-    
+
     // Access Token - typically 15 mins to 1 hour
     response.cookie('accessToken', tokens.accessToken, {
       httpOnly: true,
@@ -218,11 +218,11 @@ export class AuthController {
 
     // Also set a 'token' cookie for compatibility if needed
     response.cookie('token', tokens.accessToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 1000, // 1 hour
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 1000, // 1 hour
     });
 
     // Refresh Token - longer lived (7 days)
