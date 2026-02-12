@@ -6,6 +6,7 @@ import { AuditModule } from './audit';
 import { DatabaseModule } from './database';
 import { RedisModule } from './redis';
 import { AuthModule } from './auth';
+import { RemindersModule } from './reminders';
 import { ArcjetGuard, ArcjetModule, tokenBucket } from '@arcjet/nest';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -16,6 +17,7 @@ import { APP_GUARD } from '@nestjs/core';
     DatabaseModule,
     RedisModule,
     AuthModule,
+    RemindersModule,
     ArcjetModule.forRoot({
       isGlobal: true,
       key: process.env.ARCJET_KEY!,
