@@ -5,7 +5,9 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthService, AuthTokens } from './auth.service';
 import {
   RegisterDto,
@@ -65,14 +67,20 @@ export class AuthController {
   @Post('login/verify')
   @HttpCode(HttpStatus.OK)
   @AuditLog({ action: 'LOGIN_VERIFY', resource: 'auth', persist: true })
-  async verifyLogin(@Body() dto: VerifyLoginDto): Promise<AuthTokens> {
+  async verifyLogin(
+    @Body() dto: VerifyLoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokens> {
     const identifier = dto.email || dto.phone!;
-    return this.authService.verifyLogin(
+    const tokens = await this.authService.verifyLogin(
       dto.sessionToken,
       identifier,
       dto.identifierType,
       dto.code,
     );
+
+    this.setAuthCookies(response, tokens);
+    return tokens;
   }
 
   /**
@@ -102,8 +110,11 @@ export class AuthController {
   @AuditLog({ action: 'ONBOARDING_COMPLETE', resource: 'auth', persist: true })
   async onboarding(
     @Body() dto: OnboardingWithPasswordDto,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<AuthTokens> {
-    return this.authService.completeOnboarding(dto);
+    const tokens = await this.authService.completeOnboarding(dto);
+    this.setAuthCookies(response, tokens);
+    return tokens;
   }
 
   /**
@@ -112,8 +123,13 @@ export class AuthController {
    */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: RefreshTokenDto): Promise<AuthTokens> {
-    return this.authService.refreshTokens(dto.refreshToken);
+  async refresh(
+    @Body() dto: RefreshTokenDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokens> {
+    const tokens = await this.authService.refreshTokens(dto.refreshToken);
+    this.setAuthCookies(response, tokens);
+    return tokens;
   }
 
   /**
@@ -164,8 +180,15 @@ export class AuthController {
   @AuditLog({ action: 'LOGOUT', resource: 'auth', persist: true })
   async logout(
     @CurrentUser('sub') userId: string,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
     await this.authService.revokeAllTokens(userId);
+    
+    // Clear cookies
+    response.clearCookie('accessToken');
+    response.clearCookie('refreshToken');
+    response.clearCookie('token'); // Clear 'token' as well if we used it
+
     return { message: 'Logged out from all devices' };
   }
 
@@ -178,5 +201,37 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async me(@CurrentUser() user: JwtPayload): Promise<JwtPayload> {
     return user;
+  }
+
+  // Helper to set cookies
+  private setAuthCookies(response: Response, tokens: AuthTokens) {
+    const isProd = process.env.NODE_ENV === 'production';
+    
+    // Access Token - typically 15 mins to 1 hour
+    response.cookie('accessToken', tokens.accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 1000, // 1 hour
+    });
+
+    // Also set a 'token' cookie for compatibility if needed
+    response.cookie('token', tokens.accessToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 1000, // 1 hour
+    });
+
+    // Refresh Token - longer lived (7 days)
+    response.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
   }
 }

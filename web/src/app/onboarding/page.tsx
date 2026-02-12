@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -21,25 +20,73 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { authApi } from "@/lib/api/auth.api";
+import { OnboardingRequest } from "@/lib/api/types";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessionToken = searchParams.get("session");
+  const passwordHash = searchParams.get("passwordHash");
+
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
     country: "",
     timezone: "",
+    userType: "", // Added userType
   });
+
+  useEffect(() => {
+    if (!sessionToken || !passwordHash) {
+        toast.error("Missing session information. Please register again.");
+        router.push("/auth/register");
+    }
+  }, [sessionToken, passwordHash, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!sessionToken || !passwordHash) {
+        toast.error("Invalid session");
+        return;
+    }
+
+    if (!formData.userType) {
+        toast.error("Please select a user type");
+        return;
+    }
+
     setLoading(true);
-    // TODO: Integrate with onboarding API
-    setTimeout(() => {
-      setLoading(false);
-      toast.success("Welcome to Sentinel!");
-      router.push("/dashboard");
-    }, 1000);
+    try {
+        const payload: OnboardingRequest = {
+            sessionToken,
+            userName: formData.username,
+            userType: formData.userType as "student" | "working_professional" | "team_manager",
+            country: formData.country,
+            timezone: formData.timezone,
+            passwordHash,
+            theme: "system",
+            language: "en"
+        };
+
+        const response = await authApi.completeOnboarding(payload);
+        
+        // Manually set the cookie to ensure middleware can read it immediately
+        if (response.accessToken) {
+          document.cookie = `accessToken=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+          // Also set 'token' just in case
+          document.cookie = `token=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+        }
+        
+        toast.success("Welcome to Sentinel!");
+        router.push("/dashboard");
+    } catch (error: any) {
+        console.error("Onboarding error:", error);
+        toast.error(error.message || "Failed to complete onboarding");
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
@@ -67,6 +114,26 @@ export default function OnboardingPage() {
                 }
                 disabled={loading}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="userType">I am a...</Label>
+              <Select
+                value={formData.userType}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, userType: value })
+                }
+                disabled={loading}
+              >
+                <SelectTrigger id="userType">
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="working_professional">Working Professional</SelectItem>
+                  <SelectItem value="team_manager">Team Manager</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

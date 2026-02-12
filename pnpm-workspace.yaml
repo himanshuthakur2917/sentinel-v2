@@ -10,3 +10,4 @@ onlyBuiltDependencies:
   - '@nestjs/core'
   - bcrypt
   - sharp
+  - unrs-resolver

@@ -96,7 +96,8 @@ export default function VerifyPage() {
       const type = variables.identifierType === "email" ? "Email" : "Phone";
       toast.error(`${type} verification failed: ${error.message}`);
       if (error instanceof ApiError && error.statusCode === 401) {
-        router.back();
+        // Stay on page for retry
+        // router.back(); 
       }
       // Reset OTP on error for better UX
       if (variables.identifierType === "email") {
@@ -118,7 +119,8 @@ export default function VerifyPage() {
     onError: (error: Error) => {
       toast.error(`Failed to resend OTP: ${error.message}`);
       if (error instanceof ApiError && error.statusCode === 401) {
-        router.back();
+        // Stay on page for retry
+        // router.back();
       }
     },
   });
