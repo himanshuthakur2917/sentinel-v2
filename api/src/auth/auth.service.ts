@@ -96,17 +96,34 @@ export class AuthService {
     const query = email
       ? client
           .from('users')
-          .select('id, email, phone_number, password_hash')
+          .select(
+            'id, email, phone_number, password_hash, failed_login_attempts, account_locked_until',
+          )
           .eq('email', email)
       : client
           .from('users')
-          .select('id, email, phone_number, password_hash')
+          .select(
+            'id, email, phone_number, password_hash, failed_login_attempts, account_locked_until',
+          )
           .eq('phone_number', phone);
 
     const { data: user, error } = await query.single();
 
     if (error || !user) {
       throw new BadRequestException('User not found');
+    }
+
+    // Check if account is locked
+    if (
+      user.account_locked_until &&
+      new Date(user.account_locked_until) > new Date()
+    ) {
+      const remainingMinutes = Math.ceil(
+        (new Date(user.account_locked_until).getTime() - Date.now()) / 60000,
+      );
+      throw new UnauthorizedException(
+        `Account is locked. Try again in ${remainingMinutes} minute(s)`,
+      );
     }
 
     // Check if user has a password set
@@ -119,12 +136,49 @@ export class AuthService {
     // Verify password
     const isValidPassword = await verifyPassword(password, user.password_hash);
     if (!isValidPassword) {
-      // TODO: Implement rate limiting for failed attempts
+      // Track failed attempt
+      const newFailedAttempts = (user.failed_login_attempts || 0) + 1;
+      const updateData: any = {
+        failed_login_attempts: newFailedAttempts,
+        last_failed_login: new Date().toISOString(),
+      };
+
+      // Lock account after 5 failed attempts (15 min lockout)
+      if (newFailedAttempts >= 5) {
+        updateData.account_locked_until = new Date(
+          Date.now() + 15 * 60 * 1000,
+        ).toISOString();
+
+        await client.from('users').update(updateData).eq('id', user.id);
+
+        this.auditService.error(
+          `Account locked for ${identifier} after 5 failed attempts`,
+          'AuthService',
+        );
+        throw new UnauthorizedException(
+          'Account locked due to too many failed attempts. Try again in 15 minutes.',
+        );
+      }
+
+      await client.from('users').update(updateData).eq('id', user.id);
+
       this.auditService.warn(
-        `Failed login attempt for ${identifier}`,
+        `Failed login attempt ${newFailedAttempts}/5 for ${identifier}`,
         'AuthService',
       );
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Clear failed attempts on successful password verification
+    if (user.failed_login_attempts > 0) {
+      await client
+        .from('users')
+        .update({
+          failed_login_attempts: 0,
+          last_failed_login: null,
+          account_locked_until: null,
+        })
+        .eq('id', user.id);
     }
 
     // Send login OTP to the same identifier type used
