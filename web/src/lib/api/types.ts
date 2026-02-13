@@ -22,7 +22,7 @@ export interface RegisterRequest {
 
 export interface RegisterResponse {
   sessionToken: string;
-  passwordHash: string;
+  userId: string;
   expiresAt: string;
 }
 
