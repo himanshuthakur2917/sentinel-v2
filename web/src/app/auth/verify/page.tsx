@@ -29,7 +29,7 @@ import {
 import { OtpTimer } from "@/components/auth/OtpTimer";
 import { StageIndicator } from "@/components/auth/StageIndicator";
 import { ApiError } from "@/lib/api";
-import { getUserFromToken } from "@/lib/auth/jwt";
+
 import { useAuthStore } from "@/store/auth.store";
 
 type VerificationStep = "email" | "phone" | "complete";
@@ -37,7 +37,7 @@ type VerificationStep = "email" | "phone" | "complete";
 function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser } = useAuthStore();
+  const { fetchUser } = useAuthStore();
   const email = searchParams.get("email");
   const phone = searchParams.get("phone");
   const sessionToken = searchParams.get("session");
@@ -91,29 +91,16 @@ function VerifyPageContent() {
             // If coming from login, auto-login after verification
             if (fromLogin && userId) {
               try {
-                const tokens =
-                  await authApi.completeLoginAfterVerification(userId);
+                await authApi.completeLoginAfterVerification(userId);
 
                 // Backend sets httpOnly cookies automatically - no localStorage needed!
 
-                // Extract user info from JWT and update Zustand store
-                const user = getUserFromToken(tokens.accessToken);
-                if (user?.sub) {
-                  setUser({
-                    id: user.sub,
-                    email: user.email,
-                    userType: user.userType,
-                    onboardingCompleted: user.onboardingCompleted,
-                  });
+                // Fetch full user profile to ensure all properties are present (fullName, userName)
+                await fetchUser();
 
-                  // Always redirect to dashboard - dialog will show if onboarding incomplete
-                  toast.success("Verification complete! Redirecting...");
-                  router.push(`/dashboard/${user.sub}`);
-                } else {
-                  // If unable to extract user ID, something is wrong - redirect to login
-                  toast.error("Authentication error. Please login again.");
-                  router.push("/auth/login");
-                }
+                // Always redirect to dashboard - dialog will show if onboarding incomplete
+                toast.success("Verification complete! Redirecting...");
+                router.push(`/dashboard/${userId}`);
               } catch (error) {
                 toast.error("Failed to login. Please try again.");
                 router.push("/auth/login");

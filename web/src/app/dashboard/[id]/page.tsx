@@ -24,6 +24,7 @@ export default function DashboardPage() {
       try {
         // If user is already in store, use it
         if (user) {
+          console.log("Dashboar :",user)
           setUserType(user.userType);
           setShowOnboarding(!user.onboardingCompleted);
           setLoading(false);
