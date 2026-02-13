@@ -226,13 +226,24 @@ export class AuthService {
         `Login blocked for unverified user ${user.id}`,
         'AuthService',
       );
+
+      // Send dual OTP to re-verify or complete verification
+      // This ensures OTPs are logged in dev environment and session is created
+      const { sessionToken, expiresAt } = await this.otpService.sendDualOtp(
+        user.email,
+        user.phone_number,
+        user.id,
+      );
+
       return {
         requiresVerification: true,
         userId: user.id,
+        sessionToken, // Return session token for frontend
         emailVerified: user.email_verified,
         phoneVerified: user.phone_verified,
         email: user.email,
         phone: user.phone_number,
+        expiresAt,
       };
     }
 

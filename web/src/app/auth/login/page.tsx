@@ -53,9 +53,10 @@ export default function LoginPage() {
       if (data.requiresVerification) {
         toast.warning("Please complete email and phone verification first");
         const params = new URLSearchParams({
-          userId: data.userId!,
-          email: data.email!,
-          phone: data.phone!,
+          userId: data.requiresVerification ? data.userId : "",
+          session: data.sessionToken || "", // Pass session token
+          email: data.email || "",
+          phone: data.phone || "",
           fromLogin: "true",
         });
         router.push(`/auth/verify?${params.toString()}`);
