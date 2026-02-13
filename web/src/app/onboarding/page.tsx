@@ -28,7 +28,6 @@ function OnboardingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionToken = searchParams.get("session");
-  const passwordHash = searchParams.get("passwordHash");
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -39,16 +38,16 @@ function OnboardingPageContent() {
   });
 
   useEffect(() => {
-    if (!sessionToken || !passwordHash) {
+    if (!sessionToken) {
       toast.error("Missing session information. Please register again.");
       router.push("/auth/register");
     }
-  }, [sessionToken, passwordHash, router]);
+  }, [sessionToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!sessionToken || !passwordHash) {
+    if (!sessionToken) {
       toast.error("Invalid session");
       return;
     }
@@ -69,7 +68,6 @@ function OnboardingPageContent() {
           | "team_manager",
         country: formData.country,
         timezone: formData.timezone,
-        passwordHash,
         theme: "system",
         language: "en",
       };

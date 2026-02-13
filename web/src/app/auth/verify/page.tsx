@@ -30,7 +30,7 @@ import { OtpTimer } from "@/components/auth/OtpTimer";
 import { StageIndicator } from "@/components/auth/StageIndicator";
 import { ApiError } from "@/lib/api";
 
-type VerifyStep = "email" | "phone" | "complete";
+type VerificationStep = "email" | "phone" | "complete";
 
 function VerifyPageContent() {
   const router = useRouter();
