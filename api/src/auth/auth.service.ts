@@ -99,13 +99,19 @@ export class AuthService {
   }
 
   /**
-   * Initiate login - validate password then send OTP to the identifier used
+   * Initiate login - validate password then check verification status
    */
   async login(dto: LoginDto): Promise<{
-    sessionToken: string;
-    identifier: string;
-    type: 'email' | 'phone';
-    expiresAt: string;
+    sessionToken?: string;
+    identifier?: string;
+    type?: 'email' | 'phone';
+    expiresAt?: string;
+    requiresVerification?: boolean;
+    userId?: string;
+    emailVerified?: boolean;
+    phoneVerified?: boolean;
+    email?: string;
+    phone?: string;
   }> {
     const { email, phone, password } = dto;
 
@@ -116,19 +122,19 @@ export class AuthService {
     const identifier = email || phone!;
     const identifierType: 'email' | 'phone' = email ? 'email' : 'phone';
 
-    // Find user by email or phone
+    // Find user by email or phone - include verification status
     const client = this.supabaseService.getClient();
     const query = email
       ? client
           .from('users')
           .select(
-            'id, email, phone_number, password_hash, failed_login_attempts, account_locked_until',
+            'id, email, phone_number, email_verified, phone_verified, password_hash, failed_login_attempts, account_locked_until',
           )
           .eq('email', email)
       : client
           .from('users')
           .select(
-            'id, email, phone_number, password_hash, failed_login_attempts, account_locked_until',
+            'id, email, phone_number, email_verified, phone_verified, password_hash, failed_login_attempts, account_locked_until',
           )
           .eq('phone_number', phone);
 
@@ -206,7 +212,23 @@ export class AuthService {
         .eq('id', user.id);
     }
 
-    // Send login OTP to the same identifier type used
+    // ✅ CHECK VERIFICATION STATUS - 2FA requirement
+    if (!user.email_verified || !user.phone_verified) {
+      this.auditService.warn(
+        `Login blocked for unverified user ${user.id}`,
+        'AuthService',
+      );
+      return {
+        requiresVerification: true,
+        userId: user.id,
+        emailVerified: user.email_verified,
+        phoneVerified: user.phone_verified,
+        email: user.email,
+        phone: user.phone_number,
+      };
+    }
+
+    // If fully verified, proceed with login OTP
     const { sessionToken, expiresAt } = await this.otpService.sendLoginOtp(
       identifier,
       identifierType,
@@ -366,11 +388,59 @@ export class AuthService {
   }
 
   /**
-   * Step 3: Complete onboarding after both OTPs verified (includes password storage)
+   * Complete login after verification (for users who needed to verify during login)
    */
-  async completeOnboarding(
-    dto: OnboardingDto & { passwordHash: string },
-  ): Promise<AuthTokens> {
+  async completeLoginAfterVerification(userId: string): Promise<AuthTokens> {
+    const client = this.supabaseService.getClient();
+
+    // Verify user is fully verified
+    const { data: user, error } = await client
+      .from('users')
+      .select(
+        'id, email, phone_number, user_type, email_verified, phone_verified',
+      )
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.email_verified || !user.phone_verified) {
+      throw new UnauthorizedException('Verification incomplete');
+    }
+
+    // Update last login
+    await client
+      .from('users')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', userId);
+
+    // Generate tokens
+    const tokens = this.generateTokens(user);
+
+    // Store refresh token
+    const decoded = this.jwtService.decode(tokens.refreshToken) as {
+      jti: string;
+    };
+    await this.tokenService.storeRefreshToken(
+      userId,
+      decoded.jti,
+      REFRESH_TOKEN_TTL,
+    );
+
+    this.auditService.success(
+      `User ${userId} logged in after verification`,
+      'AuthService',
+    );
+    return tokens;
+  }
+
+  /**
+   * Step 3: Complete onboarding - UPDATE user with profile details
+   * User already exists from registration
+   */
+  async completeOnboarding(dto: OnboardingDto): Promise<AuthTokens> {
     const {
       sessionToken,
       userName,
@@ -379,25 +449,40 @@ export class AuthService {
       timezone,
       theme,
       language,
-      passwordHash,
     } = dto;
 
-    // Verify session is fully verified
-    const session = await this.otpService.isSessionFullyVerified(sessionToken);
-    if (!session || !session.emailVerified || !session.phoneVerified) {
+    // Get session to extract userId
+    const sessionData = await this.otpService.getSessionData(sessionToken);
+    if (!sessionData || !sessionData.userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    const userId = sessionData.userId;
+
+    // Verify both email and phone are verified
+    const client = this.supabaseService.getClient();
+    const { data: user, error: fetchError } = await client
+      .from('users')
+      .select(
+        'id, email, phone_number, user_type, email_verified, phone_verified',
+      )
+      .eq('id', userId)
+      .single();
+
+    if (fetchError || !user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (!user.email_verified || !user.phone_verified) {
       throw new UnauthorizedException(
-        'Both email and phone must be verified first',
+        'Both email and phone must be verified before onboarding',
       );
     }
 
-    const client = this.supabaseService.getClient();
-
-    // Create user with password hash
-    const { data: user, error } = await client
+    // ✅ UPDATE user with onboarding details (don't create)
+    const { error: updateError } = await client
       .from('users')
-      .insert({
-        email: session.email,
-        phone_number: session.phone,
+      .update({
         user_name: userName,
         user_type: userType,
         user_role: userType === 'team_manager' ? 'team_manager' : 'individual',
@@ -405,47 +490,45 @@ export class AuthService {
         timezone,
         theme: theme || 'system',
         language: language || 'en',
-        email_verified: true,
-        phone_verified: true,
         onboarding_completed: true,
         last_login_at: new Date().toISOString(),
-        password_hash: passwordHash,
       })
-      .select()
-      .single();
+      .eq('id', userId);
 
-    if (error) {
-      this.auditService.error('Failed to create user', 'AuthService', {
-        error: error.message,
-      });
-      throw new BadRequestException('Failed to create user');
+    if (updateError) {
+      this.auditService.error(
+        'Failed to update user during onboarding',
+        'AuthService',
+        {
+          error: updateError.message,
+        },
+      );
+      throw new BadRequestException('Failed to complete onboarding');
     }
 
-    // Clean up verification session
-    await this.otpService.cleanupSession(sessionToken);
-
     // Generate tokens
-    const tokens = this.generateTokens(
-      user as {
-        id: string;
-        email: string;
-        phone_number: string;
-        user_type: string;
-      },
-    );
+    const tokens = this.generateTokens({
+      id: userId,
+      email: user.email,
+      phone_number: user.phone_number,
+      user_type: userType,
+    });
 
     // Store refresh token in Redis
     const decoded = this.jwtService.decode(tokens.refreshToken) as {
       jti: string;
     };
     await this.tokenService.storeRefreshToken(
-      (user as { id: string }).id,
+      userId,
       decoded.jti,
       REFRESH_TOKEN_TTL,
     );
 
+    // Clean up verification session
+    await this.otpService.cleanupSession(sessionToken);
+
     this.auditService.success(
-      `User ${(user as { id: string }).id} created and logged in`,
+      `User ${userId} completed onboarding`,
       'AuthService',
     );
     return tokens;
