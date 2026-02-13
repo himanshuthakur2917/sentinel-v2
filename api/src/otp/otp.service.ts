@@ -66,12 +66,28 @@ export class OtpService {
   async sendDualOtp(
     email: string,
     phone: string,
+    userId: string, // NEW: link session to user
   ): Promise<{ sessionToken: string; expiresAt: string }> {
     const sessionToken = this.generateSessionToken();
     const emailCode = this.generateCode();
     const phoneCode = this.generateCode();
     const ttlSeconds = this.expiryMinutes * 60;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+    // Store session with userId in Redis
+    await this.tokenService.client.set(
+      `session:${sessionToken}`,
+      JSON.stringify({
+        userId, // NEW: store userId
+        email,
+        phone,
+        emailVerified: false,
+        phoneVerified: false,
+        createdAt: new Date().toISOString(),
+      }),
+      'EX',
+      ttlSeconds,
+    );
 
     // Store both codes in Redis
     await Promise.all([
@@ -102,14 +118,12 @@ export class OtpService {
       console.log('\n🔐 OTP CODES (Development Only):');
       console.log(`📧 Email (${email}): ${emailCode}`);
       console.log(`📱 Phone (${phone}): ${phoneCode}`);
+      console.log(`👤 User ID: ${userId}`);
       console.log(`🎫 Session: ${sessionToken.slice(0, 16)}...`);
       console.log(`⏱️  Expires: ${expiresAt}\n`);
     }
 
-    this.auditService.success(
-      `Dual OTP sent for session ${sessionToken.slice(0, 8)}...`,
-      'OtpService',
-    );
+    this.auditService.success(`Dual OTP sent for user ${userId}`, 'OtpService');
 
     return { sessionToken, expiresAt };
   }
