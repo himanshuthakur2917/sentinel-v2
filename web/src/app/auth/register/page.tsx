@@ -101,7 +101,7 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight">
             Create an account
@@ -138,7 +138,7 @@ export default function RegisterPage() {
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
+                  <SelectContent className="max-h-75">
                     {COUNTRY_CODES.map((c) => (
                       <SelectItem key={c.code} value={c.code}>
                         <span className="flex items-center gap-2">
