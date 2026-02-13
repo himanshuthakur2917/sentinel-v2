@@ -67,7 +67,6 @@ export interface OnboardingRequest {
   timezone: string;
   theme?: "light" | "dark" | "system";
   language?: "en" | "hi";
-  passwordHash: string;
 }
 
 export interface CurrentUser {
