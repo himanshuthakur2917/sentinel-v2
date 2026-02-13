@@ -1,14 +1,17 @@
 import {
   Injectable,
+  Inject,
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../database';
 import { AuditService } from '../audit';
 import { OtpService } from '../otp';
 import { TokenService } from '../redis';
+import { REDIS_CLIENT } from '../redis/constants';
 import { RegisterDto, OnboardingDto, LoginDto } from './dto';
 import { hashPassword, verifyPassword } from './utils/password.util';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -29,6 +32,7 @@ export class AuthService {
     private readonly auditService: AuditService,
     private readonly otpService: OtpService,
     private readonly tokenService: TokenService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -786,6 +790,57 @@ export class AuthService {
     identifier: string,
   ): Promise<{ success: boolean; expiresAt: string }> {
     return this.otpService.resendOtp(sessionToken, identifierType, identifier);
+  }
+
+  /**
+   * Get current user info with Redis caching
+   */
+  async getMe(userId: string): Promise<any> {
+    // 1. Check Redis cache
+    const cacheKey = `user:profile:${userId}`;
+    try {
+      const cachedUser = await this.redis.get(cacheKey);
+
+      if (cachedUser) {
+        this.auditService.debug(
+          `User profile cache hit for ${userId}`,
+          'AuthService',
+        );
+        return JSON.parse(cachedUser);
+      }
+    } catch (error) {
+      this.auditService.warn(
+        `Redis cache fetch failed for ${userId}: ${error.message}`,
+        'AuthService',
+      );
+      // Continue to fetch from DB
+    }
+
+    // 2. Fetch from DB
+    const client = this.supabaseService.getClient();
+    const { data: user, error } = await client
+      .from('users')
+      .select(
+        'id, email, full_name, user_name, profile_picture_url, user_type, onboarding_completed',
+      )
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // 3. Store in Redis (1 hour TTL)
+    try {
+      await this.redis.setex(cacheKey, 60 * 60, JSON.stringify(user));
+    } catch (error) {
+      this.auditService.warn(
+        `Redis cache store failed for ${userId}: ${error.message}`,
+        'AuthService',
+      );
+    }
+
+    return user;
   }
 
   // TODO: Implement forgot password flow

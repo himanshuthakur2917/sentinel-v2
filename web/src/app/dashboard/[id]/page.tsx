@@ -34,14 +34,17 @@ export default function DashboardPage() {
         const userData = await authApi.getMe();
 
         setUser({
-          id: userData.sub,
+          id: userData.id,
+          fullName: userData.full_name,
+          userName: userData.user_name,
+          profilePictureUrl: userData.profile_picture_url,
           email: userData.email,
-          userType: userData.userType,
-          onboardingCompleted: userData.onboardingCompleted,
+          userType: userData.user_type,
+          onboardingCompleted: userData.onboarding_completed,
         });
 
-        setUserType(userData.userType);
-        setShowOnboarding(!userData.onboardingCompleted);
+        setUserType(userData.user_type);
+        setShowOnboarding(!userData.onboarding_completed);
         setLoading(false);
       } catch (error) {
         console.error("Dashboard auth check failed:", error);

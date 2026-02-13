@@ -87,11 +87,13 @@ export interface UpdateProfileRequest {
 }
 
 export interface CurrentUser {
-  sub: string;
+  id: string;
   email: string;
-  phone: string;
-  userType: "student" | "working_professional" | "team_manager";
-  onboardingCompleted: boolean;
+  full_name: string;
+  user_name: string;
+  profile_picture_url?: string;
+  user_type: "student" | "working_professional" | "team_manager";
+  onboarding_completed: boolean;
 }
 
 export interface ResendOtpRequest {

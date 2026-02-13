@@ -1,10 +1,24 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { getUserFromToken, getTokenFromCookies } from "@/lib/auth/jwt";
+import { authApi } from "@/lib/api/auth.api";
+import { CurrentUser } from "@/lib/api/types";
+
+const mapUser = (apiUser: CurrentUser): User => ({
+  id: apiUser.id,
+  email: apiUser.email,
+  fullName: apiUser.full_name,
+  userName: apiUser.user_name,
+  profilePictureUrl: apiUser.profile_picture_url,
+  userType: apiUser.user_type,
+  onboardingCompleted: apiUser.onboarding_completed,
+});
 
 interface User {
   id: string;
   email: string;
+  fullName: string;
+  userName: string;
+  profilePictureUrl?: string;
   userType: "student" | "working_professional" | "team_manager";
   onboardingCompleted: boolean;
 }
@@ -16,8 +30,9 @@ interface AuthState {
   error: string | null;
 
   // Actions
-  refreshUser: () => void;
-  logout: () => void;
+  refreshUser: () => Promise<void>;
+  fetchUser: () => Promise<void>;
+  logout: () => Promise<void>;
   clearError: () => void;
   setUser: (user: User | null) => void;
 }
@@ -30,37 +45,36 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
 
-      // Refresh user from token in cookies
-      refreshUser: () => {
+      // Refresh user - now fetches from API
+      refreshUser: async () => {
         try {
-          const token = getTokenFromCookies();
-          if (!token) {
-            set({ user: null, error: null });
-            return;
-          }
-
-          const decoded = getUserFromToken(token);
-          if (!decoded) {
-            set({ user: null, error: "Invalid token" });
-            return;
-          }
-
-          set({
-            user: {
-              id: decoded.sub,
-              email: decoded.email,
-              userType: decoded.userType,
-              onboardingCompleted: decoded.onboardingCompleted,
-            },
-            error: null,
-          });
+          const apiUser = await authApi.getMe();
+          console.log("store :", apiUser);
+          set({ user: mapUser(apiUser), error: null });
         } catch (error) {
-          set({ user: null, error: "Failed to decode token" });
+          console.error("Failed to refresh user:", error);
+          set({ user: null, error: "Failed to refresh user" });
         }
       },
 
-      // Logout - clear user state (cookies cleared by backend)
-      logout: () => {
+      // Fetch user explicitly
+      fetchUser: async () => {
+        set({ isLoading: true });
+        try {
+          const apiUser = await authApi.getMe();
+          set({ user: mapUser(apiUser), isLoading: false, error: null });
+        } catch (error) {
+          set({ user: null, isLoading: false, error: "Failed to fetch user" });
+        }
+      },
+
+      // Logout - call API and clear state
+      logout: async () => {
+        try {
+          await authApi.logout(""); // Access token handled by cookie
+        } catch (error) {
+          console.error("Logout failed:", error);
+        }
         set({ user: null, error: null });
       },
 

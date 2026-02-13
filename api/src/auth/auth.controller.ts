@@ -264,8 +264,8 @@ export class AuthController {
   @Post('me')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async me(@CurrentUser() user: JwtPayload): Promise<JwtPayload> {
-    return user;
+  async me(@CurrentUser('sub') userId: string): Promise<any> {
+    return this.authService.getMe(userId);
   }
 
   /**

@@ -136,6 +136,12 @@ export class HttpClient {
     // Only redirect if we're in a browser environment
     if (typeof window !== "undefined") {
       const currentPath = window.location.pathname;
+
+      // Prevent infinite redirect loop if already on an auth page
+      if (currentPath.startsWith("/auth/")) {
+        return;
+      }
+
       const loginUrl = `/auth/login${currentPath !== "/" ? `?callbackUrl=${encodeURIComponent(currentPath)}` : ""}`;
       window.location.href = loginUrl;
     }

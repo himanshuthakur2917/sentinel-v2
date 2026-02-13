@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
 import { inter, poppins } from "./fonts";
 import { QueryProvider } from "@/providers/query-provider";
+import { AuthInitializer } from "@/components/auth-initializer";
 
 export const metadata: Metadata = {
   title: "Sentinel",
@@ -26,7 +27,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <AuthInitializer />
+            {children}
+          </QueryProvider>
           <Toaster />
         </ThemeProvider>
       </body>
