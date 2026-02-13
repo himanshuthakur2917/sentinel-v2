@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/select";
 import { authApi } from "@/lib/api/auth.api";
 import { OnboardingRequest } from "@/lib/api/types";
+import { Loader2 } from "lucide-react";
 
-export default function OnboardingPage() {
+function OnboardingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionToken = searchParams.get("session");
@@ -39,53 +40,56 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (!sessionToken || !passwordHash) {
-        toast.error("Missing session information. Please register again.");
-        router.push("/auth/register");
+      toast.error("Missing session information. Please register again.");
+      router.push("/auth/register");
     }
   }, [sessionToken, passwordHash, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!sessionToken || !passwordHash) {
-        toast.error("Invalid session");
-        return;
+      toast.error("Invalid session");
+      return;
     }
 
     if (!formData.userType) {
-        toast.error("Please select a user type");
-        return;
+      toast.error("Please select a user type");
+      return;
     }
 
     setLoading(true);
     try {
-        const payload: OnboardingRequest = {
-            sessionToken,
-            userName: formData.username,
-            userType: formData.userType as "student" | "working_professional" | "team_manager",
-            country: formData.country,
-            timezone: formData.timezone,
-            passwordHash,
-            theme: "system",
-            language: "en"
-        };
+      const payload: OnboardingRequest = {
+        sessionToken,
+        userName: formData.username,
+        userType: formData.userType as
+          | "student"
+          | "working_professional"
+          | "team_manager",
+        country: formData.country,
+        timezone: formData.timezone,
+        passwordHash,
+        theme: "system",
+        language: "en",
+      };
 
-        const response = await authApi.completeOnboarding(payload);
-        
-        // Manually set the cookie to ensure middleware can read it immediately
-        if (response.accessToken) {
-          document.cookie = `accessToken=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
-          // Also set 'token' just in case
-          document.cookie = `token=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
-        }
-        
-        toast.success("Welcome to Sentinel!");
-        router.push("/dashboard");
+      const response = await authApi.completeOnboarding(payload);
+
+      // Manually set the cookie to ensure middleware can read it immediately
+      if (response.accessToken) {
+        document.cookie = `accessToken=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+        // Also set 'token' just in case
+        document.cookie = `token=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+      }
+
+      toast.success("Welcome to Sentinel!");
+      router.push("/dashboard");
     } catch (error: any) {
-        console.error("Onboarding error:", error);
-        toast.error(error.message || "Failed to complete onboarding");
+      console.error("Onboarding error:", error);
+      toast.error(error.message || "Failed to complete onboarding");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -130,7 +134,9 @@ export default function OnboardingPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="working_professional">Working Professional</SelectItem>
+                  <SelectItem value="working_professional">
+                    Working Professional
+                  </SelectItem>
                   <SelectItem value="team_manager">Team Manager</SelectItem>
                 </SelectContent>
               </Select>
@@ -187,5 +193,23 @@ export default function OnboardingPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Wrap in Suspense to satisfy Next.js build requirements
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <OnboardingPageContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ import { ApiError } from "@/lib/api";
 
 type VerifyStep = "email" | "phone" | "complete";
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
@@ -97,7 +97,7 @@ export default function VerifyPage() {
       toast.error(`${type} verification failed: ${error.message}`);
       if (error instanceof ApiError && error.statusCode === 401) {
         // Stay on page for retry
-        // router.back(); 
+        // router.back();
       }
       // Reset OTP on error for better UX
       if (variables.identifierType === "email") {
@@ -381,5 +381,23 @@ export default function VerifyPage() {
         <CardContent>{renderStep()}</CardContent>
       </Card>
     </div>
+  );
+}
+
+// Wrap in Suspense to satisfy Next.js build requirements
+export default function VerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading verification...</p>
+          </div>
+        </div>
+      }
+    >
+      <VerifyPageContent />
+    </Suspense>
   );
 }
