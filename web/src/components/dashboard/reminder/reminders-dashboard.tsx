@@ -230,8 +230,20 @@ function ReminderSection({
   );
 }
 
-export default function RemindersDashboard() {
-  const personalReminders = mockReminders.filter((r) => !r.is_team_reminder);
+export default function RemindersDashboard({
+  reminders = [],
+}: {
+  reminders?: Reminder[];
+}) {
+  // Convert ISO date strings to Date objects and filter personal reminders
+  const personalReminders = reminders
+    .filter((r) => !r.is_team_reminder)
+    .map((r) => ({
+      ...r,
+      initial_deadline: new Date(r.initial_deadline),
+    }));
+
+  const now = new Date();
 
   // Filter groups
   const todayReminders = personalReminders.filter((r) =>
