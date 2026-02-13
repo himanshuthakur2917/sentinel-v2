@@ -229,6 +229,32 @@ export class TokenService {
     await this.redis.del(
       `otp:${sessionToken}:email`,
       `otp:${sessionToken}:phone`,
+      `session:${sessionToken}`, // Also delete session data
     );
+  }
+
+  /**
+   * Store verification session data with userId
+   */
+  async storeSession(
+    sessionToken: string,
+    data: any,
+    ttlSeconds: number,
+  ): Promise<void> {
+    if (!this.isRedisAvailable) return;
+
+    const key = `session:${sessionToken}`;
+    await this.redis.setex(key, ttlSeconds, JSON.stringify(data));
+  }
+
+  /**
+   * Get verification session data
+   */
+  async getSession(sessionToken: string): Promise<any> {
+    if (!this.isRedisAvailable) return null;
+
+    const key = `session:${sessionToken}`;
+    const data = await this.redis.get(key);
+    return data ? JSON.parse(data) : null;
   }
 }

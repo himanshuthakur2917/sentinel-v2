@@ -74,18 +74,17 @@ export class OtpService {
     const ttlSeconds = this.expiryMinutes * 60;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
-    // Store session with userId in Redis
-    await this.tokenService.client.set(
-      `session:${sessionToken}`,
-      JSON.stringify({
-        userId, // NEW: store userId
+    // Store session with userId using TokenService
+    await this.tokenService.storeSession(
+      sessionToken,
+      {
+        userId,
         email,
         phone,
         emailVerified: false,
         phoneVerified: false,
         createdAt: new Date().toISOString(),
-      }),
-      'EX',
+      },
       ttlSeconds,
     );
 
@@ -272,6 +271,19 @@ export class OtpService {
   ): Promise<boolean> {
     const record = await this.tokenService.getOtp(sessionToken, type);
     return !!record?.verified;
+  }
+
+  /**
+   * Get session data including userId from Redis
+   */
+  async getSessionData(sessionToken: string): Promise<{
+    userId: string;
+    email: string;
+    phone: string;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+  } | null> {
+    return await this.tokenService.getSession(sessionToken);
   }
 
   /**
