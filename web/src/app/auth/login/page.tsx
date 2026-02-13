@@ -192,7 +192,7 @@ export default function LoginPage() {
                       onValueChange={setCountryCode}
                       disabled={loading}
                     >
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-35">
                         <SelectValue placeholder="Code" />
                       </SelectTrigger>
                       <SelectContent className="max-h-75">
