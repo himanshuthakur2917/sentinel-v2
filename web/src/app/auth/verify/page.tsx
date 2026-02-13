@@ -38,14 +38,16 @@ function VerifyPageContent() {
   const email = searchParams.get("email");
   const phone = searchParams.get("phone");
   const sessionToken = searchParams.get("session");
-  const passwordHash = searchParams.get("passwordHash");
+  const userId = searchParams.get("userId");
+  const fromLogin = searchParams.get("fromLogin") === "true";
   const initialExpiresAt = searchParams.get("expiresAt");
 
-  const [currentStep, setCurrentStep] = useState<VerifyStep>("email");
-  const [emailOtp, setEmailOtp] = useState("");
-  const [phoneOtp, setPhoneOtp] = useState("");
+  // Verification state
+  const [currentStep, setCurrentStep] = useState<VerificationStep>("email");
   const [emailVerified, setEmailVerified] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [emailOtp, setEmailOtp] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
 
   // Timer state - server-synced expiry
   const [expiresAt, setExpiresAt] = useState<string>(
@@ -70,7 +72,7 @@ function VerifyPageContent() {
 
   const verifyMutation = useMutation({
     mutationFn: authApi.verifyOtp,
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       if (variables.identifierType === "email") {
         setEmailVerified(true);
         toast.success("Email verified successfully");
@@ -80,14 +82,29 @@ function VerifyPageContent() {
         toast.success("Phone verified successfully");
         setCurrentStep("complete");
 
-        // Final completion logic
-        if (data.fullyVerified || (emailVerified && true)) {
-          setTimeout(() => {
-            const params = new URLSearchParams({
-              session: sessionToken!,
-              passwordHash: passwordHash || "",
-            });
-            router.push(`/onboarding?${params.toString()}`);
+        // Final completion logic - check if fully verified
+        if (data.fullyVerified) {
+          setTimeout(async () => {
+            // If coming from login, auto-login after verification
+            if (fromLogin && userId) {
+              try {
+                const tokens =
+                  await authApi.completeLoginAfterVerification(userId);
+                localStorage.setItem("accessToken", tokens.accessToken);
+                localStorage.setItem("refreshToken", tokens.refreshToken);
+                toast.success("Verification complete! Logging you in...");
+                router.push("/dashboard");
+              } catch (error) {
+                toast.error("Failed to login. Please try again.");
+                router.push("/auth/login");
+              }
+            } else {
+              // Coming from registration - proceed to onboarding
+              const params = new URLSearchParams({
+                session: sessionToken!,
+              });
+              router.push(`/onboarding?${params.toString()}`);
+            }
           }, 1000);
         }
       }
