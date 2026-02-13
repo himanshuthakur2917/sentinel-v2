@@ -60,10 +60,9 @@ export default function RegisterPage() {
       toast.success("Verification codes sent to email and phone");
       const params = new URLSearchParams({
         session: data.sessionToken,
+        userId: data.userId,
         email: formData.email,
         phone: fullPhoneNumber,
-        passwordHash: data.passwordHash,
-        expiresAt: data.expiresAt,
       });
       router.push(`/auth/verify?${params.toString()}`);
     },

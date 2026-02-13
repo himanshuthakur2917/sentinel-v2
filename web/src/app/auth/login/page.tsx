@@ -46,11 +46,24 @@ export default function LoginPage() {
   const [sessionToken, setSessionToken] = useState("");
   const [loading, setLoading] = useState(false);
 
-
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      setSessionToken(data.sessionToken);
+      // Check if user needs verification (2FA requirement)
+      if (data.requiresVerification) {
+        toast.warning("Please complete email and phone verification first");
+        const params = new URLSearchParams({
+          userId: data.userId!,
+          email: data.email!,
+          phone: data.phone!,
+          fromLogin: "true",
+        });
+        router.push(`/auth/verify?${params.toString()}`);
+        return;
+      }
+
+      // User is verified - proceed with login OTP
+      setSessionToken(data.sessionToken!);
       setStep("otp");
       const destination = identifierType === "email" ? "email" : "phone";
       toast.success(`OTP sent to your ${destination}`);
@@ -107,7 +120,6 @@ export default function LoginPage() {
       code: otp,
     });
   };
-
 
   const resendOtp = async () => {
     setLoading(true);
