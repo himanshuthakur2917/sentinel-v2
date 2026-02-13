@@ -1,11 +1,9 @@
 import { httpClient } from "./client";
 import type {
   RegisterRequest,
-  RegisterResponse,
   VerifyOtpRequest,
   VerifyOtpResponse,
   LoginRequest,
-  LoginResponse,
   VerifyLoginRequest,
   AuthTokens,
   OnboardingRequest,
@@ -13,6 +11,27 @@ import type {
   ResendOtpRequest,
   ResendOtpResponse,
 } from "./types";
+
+// Register - returns sessionToken and userId now
+export interface RegisterResponse {
+  sessionToken: string;
+  userId: string;
+  expiresAt: string;
+}
+
+// Login - can return verification requirement
+export interface LoginResponse {
+  sessionToken?: string;
+  identifier?: string;
+  type?: "email" | "phone";
+  expiresAt?: string;
+  requiresVerification?: boolean;
+  userId?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  email?: string;
+  phone?: string;
+}
 
 export const authApi = {
   /**
@@ -88,7 +107,19 @@ export const authApi = {
   },
 
   /**
-   * Resend OTP during login verification
+   * Complete login after verification (auto-login)
+   */
+  completeLoginAfterVerification: async (
+    userId: string,
+  ): Promise<AuthTokens> => {
+    return httpClient.post<AuthTokens>(
+      "/auth/complete-login-after-verification",
+      { userId },
+    );
+  },
+
+  /**
+   * Resend OTP for a specific identifier type
    */
   resendLoginOtp: async (
     data: ResendOtpRequest,
