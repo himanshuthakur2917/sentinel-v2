@@ -11,6 +11,7 @@ import type {
   ResendOtpResponse,
   RegisterResponse,
   LoginResponse,
+  CurrentUser,
 } from "./types";
 
 export const authApi = {
