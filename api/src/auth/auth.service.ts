@@ -221,14 +221,14 @@ export class AuthService {
   }
 
   /**
-   * Step 2: Verify OTP (called twice for registration - once for email, once for phone)
+   * Step 2: Verify OTP - UPDATE DATABASE with verified status
    */
   async verifyOtp(
     sessionToken: string,
     identifier: string,
     identifierType: 'email' | 'phone',
     code: string,
-  ): Promise<{ verified: boolean; fullyVerified: boolean }> {
+  ): Promise<{ verified: boolean; fullyVerified: boolean; userId: string }> {
     const verified = await this.otpService.verifyCode(
       sessionToken,
       identifier,
@@ -240,11 +240,43 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    // Check if both are verified
-    const session = await this.otpService.isSessionFullyVerified(sessionToken);
-    const fullyVerified = session?.emailVerified && session?.phoneVerified;
+    // Get session to extract userId
+    const sessionData = await this.otpService.getSessionData(sessionToken);
+    if (!sessionData || !sessionData.userId) {
+      throw new UnauthorizedException('Invalid session');
+    }
 
-    return { verified: true, fullyVerified: !!fullyVerified };
+    const userId = sessionData.userId;
+
+    // ✅ UPDATE users table with verified status
+    const client = this.supabaseService.getClient();
+    if (identifierType === 'email') {
+      await client
+        .from('users')
+        .update({ email_verified: true })
+        .eq('id', userId);
+    } else {
+      await client
+        .from('users')
+        .update({ phone_verified: true })
+        .eq('id', userId);
+    }
+
+    // Check if both are now verified
+    const { data: user } = await client
+      .from('users')
+      .select('email_verified, phone_verified')
+      .eq('id', userId)
+      .single();
+
+    const fullyVerified = user?.email_verified && user?.phone_verified;
+
+    this.auditService.success(
+      `${identifierType} verified for user ${userId}`,
+      'AuthService',
+    );
+
+    return { verified: true, fullyVerified: !!fullyVerified, userId };
   }
 
   /**
