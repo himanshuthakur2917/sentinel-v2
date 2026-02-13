@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Define the array of allowed routes (public routes)
-const publicRoutes = [
-  "/",
-  "/auth/login",
-  "/auth/register",
-  "/auth/verify",
-  "/onboarding",
-];
+const publicRoutes = ["/", "/auth/login", "/auth/register", "/auth/verify"];
 
 // Auth routes that authenticated users should not access
 const authRoutes = ["/auth/login", "/auth/register"];
@@ -64,18 +58,13 @@ export function proxy(request: NextRequest) {
     if (userId) {
       // Check if onboarding is completed
       if (!onboardingCompleted) {
-        // Redirect to onboarding if not completed
-        const onboardingUrl = new URL("/onboarding", request.url);
-        return NextResponse.redirect(onboardingUrl);
-      } else {
-        // Redirect to dashboard if onboarding is completed
         const dashboardUrl = new URL(`/dashboard/${userId}`, request.url);
         return NextResponse.redirect(dashboardUrl);
       }
     } else {
       // If we can't extract user ID, redirect to generic dashboard
-      const dashboardUrl = new URL("/dashboard", request.url);
-      return NextResponse.redirect(dashboardUrl);
+      const loginUrl = new URL("/auth/login", request.url);
+      return NextResponse.redirect(loginUrl);
     }
   }
 
@@ -102,28 +91,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // User has token, check if onboarding is completed for dashboard access
-  const { userId, onboardingCompleted } = getUserDataFromToken(token);
-
-  // If trying to access dashboard without completing onboarding, redirect to onboarding
-  if (pathname.startsWith("/dashboard") && !onboardingCompleted) {
-    const onboardingUrl = new URL("/onboarding", request.url);
-    return NextResponse.redirect(onboardingUrl);
-  }
-
   return NextResponse.next();
 }
 
 // Configuration for the middleware matcher
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

@@ -461,6 +461,7 @@ export class AuthService {
   async completeOnboarding(dto: OnboardingDto): Promise<AuthTokens> {
     const {
       sessionToken,
+      fullName,
       userName,
       userType,
       country,
@@ -501,6 +502,7 @@ export class AuthService {
     const { error: updateError } = await client
       .from('users')
       .update({
+        full_name: fullName,
         user_name: userName,
         user_type: userType,
         user_role: userType === 'team_manager' ? 'team_manager' : 'individual',
@@ -559,6 +561,7 @@ export class AuthService {
   async updateProfile(
     userId: string,
     data: {
+      fullName: string;
       userName: string;
       userType: 'student' | 'working_professional' | 'team_manager';
       country: string;
@@ -586,6 +589,7 @@ export class AuthService {
     const { error: updateError } = await client
       .from('users')
       .update({
+        full_name: data.fullName,
         user_name: userName,
         user_type: userType,
         user_role: userType === 'team_manager' ? 'team_manager' : 'individual',
@@ -786,4 +790,19 @@ export class AuthService {
 
   // TODO: Implement forgot password flow
   // TODO: Implement rate limiting for failed login attempts
+  /**
+   * Check if username is available
+   */
+  async checkUsernameAvailability(username: string): Promise<boolean> {
+    const client = this.supabaseService.getClient();
+    const { data, error } = await client
+      .from('users')
+      .select('id')
+      .eq('user_name', username)
+      .single();
+
+    // If we find a user, the username is NOT available (return false)
+    // If we don't find a user (error or null data), it IS available (return true)
+    return !data;
+  }
 }

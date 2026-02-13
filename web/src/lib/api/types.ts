@@ -67,6 +67,7 @@ export interface VerifyLoginRequest {
 
 export interface OnboardingRequest {
   sessionToken: string;
+  fullName: string;
   userName: string;
   userType: "student" | "working_professional" | "team_manager";
   country: string;
@@ -76,6 +77,7 @@ export interface OnboardingRequest {
 }
 
 export interface UpdateProfileRequest {
+  fullName: string;
   userName: string;
   userType: "student" | "working_professional" | "team_manager";
   country: string;
@@ -88,7 +90,8 @@ export interface CurrentUser {
   sub: string;
   email: string;
   phone: string;
-  userType: string;
+  userType: "student" | "working_professional" | "team_manager";
+  onboardingCompleted: boolean;
 }
 
 export interface ResendOtpRequest {

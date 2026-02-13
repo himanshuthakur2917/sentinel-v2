@@ -7,6 +7,10 @@ export class OnboardingDto {
 
   @IsString()
   @IsNotEmpty()
+  fullName: string;
+
+  @IsString()
+  @IsNotEmpty()
   userName: string;
 
   @IsString()

@@ -3,6 +3,10 @@ import { IsNotEmpty, IsString, IsIn, IsOptional } from 'class-validator';
 export class UpdateProfileDto {
   @IsString()
   @IsNotEmpty()
+  fullName: string;
+
+  @IsString()
+  @IsNotEmpty()
   userName: string;
 
   @IsString()

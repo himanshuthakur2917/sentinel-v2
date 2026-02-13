@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -107,7 +107,7 @@ export default function LoginPage() {
           }
         }
 
-        // Default redirect to dashboard
+        // Always redirect to dashboard - dialog will show if onboarding incomplete
         router.push(`/dashboard/${user.sub}`);
       } else {
         // If unable to extract user ID, something is wrong - redirect to login

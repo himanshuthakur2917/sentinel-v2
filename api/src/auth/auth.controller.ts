@@ -1,11 +1,14 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService, AuthTokens } from './auth.service';
@@ -129,6 +132,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthTokens> {
     const tokens = await this.authService.updateProfile(userId, {
+      fullName: dto.fullName,
       userName: dto.userName,
       userType: dto.userType,
       country: dto.country,
@@ -238,6 +242,22 @@ export class AuthController {
   }
 
   /**
+   * POST /auth/clear-cookies
+   * Clear auth cookies without requiring authentication
+   * Used to break redirect loops when client has invalid/expired cookies
+   */
+  @Post('clear-cookies')
+  @HttpCode(HttpStatus.OK)
+  async clearCookies(
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ message: string }> {
+    response.clearCookie('accessToken');
+    response.clearCookie('refreshToken');
+    response.clearCookie('token');
+    return { message: 'Cookies cleared' };
+  }
+
+  /**
    * GET /auth/me
    * Get current user info from JWT
    */
@@ -246,6 +266,23 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async me(@CurrentUser() user: JwtPayload): Promise<JwtPayload> {
     return user;
+  }
+
+  /**
+   * GET /auth/check-username
+   * Check if username is available
+   */
+  @Get('check-username')
+  @HttpCode(HttpStatus.OK)
+  async checkUsername(
+    @Query('username') username: string,
+  ): Promise<{ available: boolean }> {
+    if (!username) {
+      throw new BadRequestException('Username is required');
+    }
+    const available =
+      await this.authService.checkUsernameAvailability(username);
+    return { available };
   }
 
   // Helper to set cookies

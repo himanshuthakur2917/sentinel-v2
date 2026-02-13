@@ -105,7 +105,9 @@ function VerifyPageContent() {
                     userType: user.userType,
                     onboardingCompleted: user.onboardingCompleted,
                   });
-                  toast.success("Verification complete! Logging you in...");
+
+                  // Always redirect to dashboard - dialog will show if onboarding incomplete
+                  toast.success("Verification complete! Redirecting...");
                   router.push(`/dashboard/${user.sub}`);
                 } else {
                   // If unable to extract user ID, something is wrong - redirect to login
@@ -117,11 +119,10 @@ function VerifyPageContent() {
                 router.push("/auth/login");
               }
             } else {
-              // Coming from registration - proceed to onboarding
-              const params = new URLSearchParams({
-                session: sessionToken!,
-              });
-              router.push(`/onboarding?${params.toString()}`);
+              // Coming from registration - redirect to dashboard
+              // Onboarding dialog will show automatically if needed
+              toast.success("Verification complete! Redirecting...");
+              router.push(`/dashboard/${userId}`);
             }
           }, 1000);
         }

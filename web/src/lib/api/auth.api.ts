@@ -76,12 +76,26 @@ export const authApi = {
   },
 
   /**
-   * Get current user info
+   * Get current user info (using bearer token)
    */
   getCurrentUser: async (accessToken: string): Promise<CurrentUser> => {
     return httpClient.post<CurrentUser>("/auth/me", undefined, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+  },
+
+  /**
+   * Get current user info (using cookies)
+   */
+  getMe: async (): Promise<CurrentUser> => {
+    return httpClient.post<CurrentUser>("/auth/me");
+  },
+
+  /**
+   * Clear auth cookies (break redirect loops)
+   */
+  clearCookies: async (): Promise<{ message: string }> => {
+    return httpClient.post<{ message: string }>("/auth/clear-cookies");
   },
 
   /**
@@ -115,5 +129,14 @@ export const authApi = {
     data: ResendOtpRequest,
   ): Promise<ResendOtpResponse> => {
     return httpClient.post<ResendOtpResponse>("/auth/resend-login-otp", data);
+  },
+
+  /**
+   * Check if username is available
+   */
+  checkUsername: async (username: string): Promise<{ available: boolean }> => {
+    return httpClient.get<{ available: boolean }>(
+      `/auth/check-username?username=${username}`,
+    );
   },
 };

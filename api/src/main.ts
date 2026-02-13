@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AuditService } from './audit';
 
@@ -7,6 +8,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true, // Buffer logs until Pino logger is ready
   });
+
+  app.use(cookieParser());
 
   // Enable CORS for frontend
   app.enableCors({
