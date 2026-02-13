@@ -33,12 +33,12 @@ export class AuthService {
   ) {}
 
   /**
-   * Step 1: Initiate registration - validate & send OTP to both email and phone
-   * Password is stored after OTP verification in completeOnboarding
+   * Step 1: Initiate registration - CREATE USER IMMEDIATELY with verified=false
+   * Then send OTP to both email and phone for verification
    */
   async register(dto: RegisterDto): Promise<{
     sessionToken: string;
-    passwordHash: string;
+    userId: string;
     expiresAt: string;
   }> {
     const { email, phone, password } = dto;
@@ -57,20 +57,45 @@ export class AuthService {
       );
     }
 
-    // Hash password for later storage
+    // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Send dual OTP
+    // ✅ CREATE USER IMMEDIATELY with verified flags as FALSE
+    const { data: user, error } = await client
+      .from('users')
+      .insert({
+        email,
+        phone_number: phone,
+        password_hash: passwordHash,
+        email_verified: false,
+        phone_verified: false,
+        onboarding_completed: false,
+        created_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      this.auditService.error(
+        'Failed to create user during registration',
+        'AuthService',
+        { error: error.message },
+      );
+      throw new BadRequestException('Failed to create user');
+    }
+
+    // Send dual OTP with userId
     const { sessionToken, expiresAt } = await this.otpService.sendDualOtp(
       email,
       phone,
+      user.id,
     );
 
     this.auditService.info(
-      `Registration initiated for ${email}`,
+      `User ${user.id} created (unverified) and OTPs sent`,
       'AuthService',
     );
-    return { sessionToken, passwordHash, expiresAt };
+    return { sessionToken, userId: user.id, expiresAt };
   }
 
   /**
