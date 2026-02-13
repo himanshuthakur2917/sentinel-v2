@@ -41,7 +41,7 @@ export class AuthController {
   @AuditLog({ action: 'REGISTER_INITIATE', resource: 'auth', persist: true })
   async register(
     @Body() dto: RegisterDto,
-  ): Promise<{ sessionToken: string; passwordHash: string }> {
+  ): Promise<{ sessionToken: string; userId: string; expiresAt: string }> {
     return this.authService.register(dto);
   }
 
@@ -52,11 +52,7 @@ export class AuthController {
    */
   @Post('login')
   @AuditLog({ action: 'LOGIN_INITIATE', resource: 'auth', persist: true })
-  async login(@Body() dto: LoginDto): Promise<{
-    sessionToken: string;
-    identifier: string;
-    type: 'email' | 'phone';
-  }> {
+  async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
@@ -92,7 +88,7 @@ export class AuthController {
   @AuditLog({ action: 'OTP_VERIFY', resource: 'auth', persist: true })
   async verifyOtp(
     @Body() dto: VerifyOtpDto,
-  ): Promise<{ verified: boolean; fullyVerified: boolean }> {
+  ): Promise<{ verified: boolean; fullyVerified: boolean; userId: string }> {
     return this.authService.verifyOtp(
       dto.sessionToken,
       dto.identifier,
@@ -103,16 +99,38 @@ export class AuthController {
 
   /**
    * POST /auth/onboarding
-   * Complete user onboarding after both OTPs verified
-   * Requires passwordHash from registration step
+   * Complete user onboarding and create account
    */
   @Post('onboarding')
+  @HttpCode(HttpStatus.OK)
   @AuditLog({ action: 'ONBOARDING_COMPLETE', resource: 'auth', persist: true })
-  async onboarding(
-    @Body() dto: OnboardingWithPasswordDto,
+  async completeOnboarding(
+    @Body() dto: OnboardingDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthTokens> {
     const tokens = await this.authService.completeOnboarding(dto);
+    this.setAuthCookies(response, tokens);
+    return tokens;
+  }
+
+  /**
+   * POST /auth/complete-login-after-verification
+   * Auto-login after completing verification during login flow
+   */
+  @Post('complete-login-after-verification')
+  @HttpCode(HttpStatus.OK)
+  @AuditLog({
+    action: 'LOGIN_AFTER_VERIFICATION',
+    resource: 'auth',
+    persist: true,
+  })
+  async completeLoginAfterVerification(
+    @Body() body: { userId: string },
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokens> {
+    const tokens = await this.authService.completeLoginAfterVerification(
+      body.userId,
+    );
     this.setAuthCookies(response, tokens);
     return tokens;
   }
