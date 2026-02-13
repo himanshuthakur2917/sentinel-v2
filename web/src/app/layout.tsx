@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
-import { grift } from "./fonts";
+import { inter, poppins } from "./fonts";
 import { QueryProvider } from "@/providers/query-provider";
 
 export const metadata: Metadata = {
@@ -17,7 +17,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${grift.variable} font-sans antialiased`}>
+      <body
+        className={`${inter.variable} ${poppins.variable} font-sans antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
