@@ -3,9 +3,11 @@ import { Button } from "../ui/button";
 import { LiquidGlass } from "@creativoma/liquid-glass";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const router = useRouter();
 
   const navLinks = [
     { name: "Home", href: "#home" },
@@ -48,10 +50,16 @@ const Navbar = () => {
           <Button
             variant="ghost"
             className="text-sm font-medium hover:bg-accent transition-all duration-300 hover:scale-105"
+            onClick={() => {
+              router.push("/auth/login");
+            }}
           >
             Login
           </Button>
-          <Button className="text-sm font-medium bg-primary hover:bg-primary/90 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/20">
+          <Button className="text-sm font-medium bg-primary hover:bg-primary/90 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/20"
+          onClick={() => {
+            router.push("/auth/register");
+          }}>
             Sign Up
           </Button>
         </div>
