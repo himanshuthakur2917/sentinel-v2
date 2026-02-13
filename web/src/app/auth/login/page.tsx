@@ -127,7 +127,7 @@ export default function LoginPage() {
       // TODO: Implement resend OTP API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
       toast.success("New OTP sent!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to resend OTP");
     } finally {
       setLoading(false);

@@ -69,6 +69,7 @@ export class AuthService {
         password_hash: passwordHash,
         email_verified: false,
         phone_verified: false,
+        user_type: 'student', // Default valid type required by constraint
         onboarding_completed: false,
         created_at: new Date().toISOString(),
       })
@@ -79,9 +80,16 @@ export class AuthService {
       this.auditService.error(
         'Failed to create user during registration',
         'AuthService',
-        { error: error.message },
+        {
+          error: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        },
       );
-      throw new BadRequestException('Failed to create user');
+      throw new BadRequestException(
+        `Failed to create user: ${error.message} (code: ${error.code})`,
+      );
     }
 
     // Send dual OTP with userId
