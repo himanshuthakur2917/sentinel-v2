@@ -21,12 +21,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { authApi } from "@/lib/api/auth.api";
-import { OnboardingRequest } from "@/lib/api/types";
+import { OnboardingRequest, UpdateProfileRequest } from "@/lib/api/types";
 import { Loader2 } from "lucide-react";
+import { getUserFromToken } from "@/lib/auth/jwt";
+import { useAuthStore } from "@/store/auth.store";
 
 function OnboardingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setUser } = useAuthStore();
   const sessionToken = searchParams.get("session");
 
   const [loading, setLoading] = useState(false);
@@ -47,11 +50,6 @@ function OnboardingPageContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!sessionToken) {
-      toast.error("Invalid session");
-      return;
-    }
-
     if (!formData.userType) {
       toast.error("Please select a user type");
       return;
@@ -59,30 +57,58 @@ function OnboardingPageContent() {
 
     setLoading(true);
     try {
-      const payload: OnboardingRequest = {
-        sessionToken,
-        userName: formData.username,
-        userType: formData.userType as
-          | "student"
-          | "working_professional"
-          | "team_manager",
-        country: formData.country,
-        timezone: formData.timezone,
-        theme: "system",
-        language: "en",
-      };
+      let response;
 
-      const response = await authApi.completeOnboarding(payload);
-
-      // Manually set the cookie to ensure middleware can read it immediately
-      if (response.accessToken) {
-        document.cookie = `accessToken=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
-        // Also set 'token' just in case
-        document.cookie = `token=${response.accessToken}; path=/; max-age=86400; SameSite=Lax`;
+      // Check if we have a session token (coming from registration) or access token (coming from login)
+      if (sessionToken) {
+        // Registration flow - use completeOnboarding with session token
+        const payload: OnboardingRequest = {
+          sessionToken,
+          userName: formData.username,
+          userType: formData.userType as
+            | "student"
+            | "working_professional"
+            | "team_manager",
+          country: formData.country,
+          timezone: formData.timezone,
+          theme: "system",
+          language: "en",
+        };
+        response = await authApi.completeOnboarding(payload);
+      } else {
+        // Login redirect flow - use updateProfile with JWT authentication
+        const payload: UpdateProfileRequest = {
+          userName: formData.username,
+          userType: formData.userType as
+            | "student"
+            | "working_professional"
+            | "team_manager",
+          country: formData.country,
+          timezone: formData.timezone,
+          theme: "system",
+          language: "en",
+        };
+        response = await authApi.updateProfile(payload);
       }
 
-      toast.success("Welcome to Sentinel!");
-      router.push("/dashboard");
+      // Backend sets httpOnly cookies automatically - no manual cookie setting needed!
+
+      // Extract user info from JWT token and update Zustand store
+      const user = getUserFromToken(response.accessToken);
+      if (user?.sub) {
+        setUser({
+          id: user.sub,
+          email: user.email,
+          userType: user.userType,
+          onboardingCompleted: user.onboardingCompleted,
+        });
+        toast.success("Welcome to Sentinel!");
+        router.push(`/dashboard/${user.sub}`);
+      } else {
+        // If unable to extract user ID, something is wrong - redirect to login
+        toast.error("Authentication error. Please login again.");
+        router.push("/auth/login");
+      }
     } catch (error: any) {
       console.error("Onboarding error:", error);
       toast.error(error.message || "Failed to complete onboarding");

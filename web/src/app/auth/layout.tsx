@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { AuthErrorBoundary } from "@/components/auth/AuthErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Authentication | Sentinel",
@@ -10,5 +11,5 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <AuthErrorBoundary>{children}</AuthErrorBoundary>;
 }

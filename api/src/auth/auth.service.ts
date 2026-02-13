@@ -20,7 +20,6 @@ export interface AuthTokens {
 
 const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
-const OTP_SESSION_TTL = 90; // 90 seconds after password verification
 
 @Injectable()
 export class AuthService {
@@ -248,10 +247,10 @@ export class AuthService {
     }
 
     // If fully verified, proceed with login OTP
+    // TTL will use default from OTP service config (env: OTP_EXPIRY_SECONDS)
     const { sessionToken, expiresAt } = await this.otpService.sendLoginOtp(
       identifier,
       identifierType,
-      OTP_SESSION_TTL,
     );
 
     this.auditService.info(
@@ -357,11 +356,11 @@ export class AuthService {
       identifierType === 'email'
         ? client
             .from('users')
-            .select('id, email, phone_number, user_type')
+            .select('id, email, phone_number, user_type, onboarding_completed')
             .eq('email', identifier)
         : client
             .from('users')
-            .select('id, email, phone_number, user_type')
+            .select('id, email, phone_number, user_type, onboarding_completed')
             .eq('phone_number', identifier);
 
     const { data: user, error } = await query.single();
@@ -416,7 +415,7 @@ export class AuthService {
     const { data: user, error } = await client
       .from('users')
       .select(
-        'id, email, phone_number, user_type, email_verified, phone_verified',
+        'id, email, phone_number, user_type, email_verified, phone_verified, onboarding_completed',
       )
       .eq('id', userId)
       .single();
@@ -554,6 +553,85 @@ export class AuthService {
   }
 
   /**
+   * Update user profile (for authenticated users completing onboarding after login)
+   * Uses JWT authentication instead of session token
+   */
+  async updateProfile(
+    userId: string,
+    data: {
+      userName: string;
+      userType: 'student' | 'working_professional' | 'team_manager';
+      country: string;
+      timezone: string;
+      theme?: 'light' | 'dark' | 'system';
+      language?: 'en' | 'hi';
+    },
+  ): Promise<AuthTokens> {
+    const { userName, userType, country, timezone, theme, language } = data;
+
+    const client = this.supabaseService.getClient();
+
+    // Get current user data
+    const { data: user, error: fetchError } = await client
+      .from('users')
+      .select('id, email, phone_number, user_type')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError || !user) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Update user with profile details
+    const { error: updateError } = await client
+      .from('users')
+      .update({
+        user_name: userName,
+        user_type: userType,
+        user_role: userType === 'team_manager' ? 'team_manager' : 'individual',
+        country,
+        timezone,
+        theme: theme || 'system',
+        language: language || 'en',
+        onboarding_completed: true,
+        last_login_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      this.auditService.error('Failed to update user profile', 'AuthService', {
+        error: updateError.message,
+      });
+      throw new BadRequestException('Failed to update profile');
+    }
+
+    // Generate new tokens with updated onboarding status
+    const tokens = this.generateTokens({
+      id: userId,
+      email: user.email,
+      phone_number: user.phone_number,
+      user_type: userType,
+      onboarding_completed: true,
+    });
+
+    // Store refresh token in Redis
+    const decoded = this.jwtService.decode(tokens.refreshToken) as {
+      jti: string;
+    };
+    await this.tokenService.storeRefreshToken(
+      userId,
+      decoded.jti,
+      REFRESH_TOKEN_TTL,
+    );
+
+    this.auditService.success(
+      `User ${userId} updated profile and completed onboarding`,
+      'AuthService',
+    );
+    return tokens;
+  }
+
+  /**
    * Refresh access token using refresh token
    */
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
@@ -587,7 +665,7 @@ export class AuthService {
     const client = this.supabaseService.getClient();
     const { data: user, error } = await client
       .from('users')
-      .select('id, email, phone_number, user_type')
+      .select('id, email, phone_number, user_type, onboarding_completed')
       .eq('id', decoded.sub)
       .single();
 
@@ -630,6 +708,7 @@ export class AuthService {
     email: string;
     phone_number: string;
     user_type: string;
+    onboarding_completed?: boolean;
   }): AuthTokens {
     const tokenId = randomUUID();
 
@@ -638,6 +717,7 @@ export class AuthService {
       email: user.email,
       phone: user.phone_number,
       userType: user.user_type as JwtPayload['userType'],
+      onboardingCompleted: user.onboarding_completed ?? false,
       jti: tokenId,
     };
 

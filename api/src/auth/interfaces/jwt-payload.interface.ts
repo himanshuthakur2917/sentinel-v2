@@ -3,6 +3,7 @@ export interface JwtPayload {
   email: string;
   phone: string;
   userType: 'student' | 'working_professional' | 'team_manager';
+  onboardingCompleted: boolean;
   iat?: number;
   exp?: number;
 }

@@ -7,6 +7,7 @@ import type {
   VerifyLoginRequest,
   AuthTokens,
   OnboardingRequest,
+  UpdateProfileRequest,
   ResendOtpRequest,
   ResendOtpResponse,
   RegisterResponse,
@@ -48,6 +49,14 @@ export const authApi = {
    */
   completeOnboarding: async (data: OnboardingRequest): Promise<AuthTokens> => {
     return httpClient.post<AuthTokens>("/auth/onboarding", data);
+  },
+
+  /**
+   * Update profile for authenticated users (completing onboarding after login)
+   * Uses JWT authentication from cookies
+   */
+  updateProfile: async (data: UpdateProfileRequest): Promise<AuthTokens> => {
+    return httpClient.post<AuthTokens>("/auth/update-profile", data);
   },
 
   /**

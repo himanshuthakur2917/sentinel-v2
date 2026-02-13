@@ -4,6 +4,7 @@ interface JWTPayload {
   sub: string; // user ID
   userType: "student" | "working_professional" | "team_manager";
   email: string;
+  onboardingCompleted: boolean;
   exp: number;
 }
 

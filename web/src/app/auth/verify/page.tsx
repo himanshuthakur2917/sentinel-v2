@@ -29,12 +29,15 @@ import {
 import { OtpTimer } from "@/components/auth/OtpTimer";
 import { StageIndicator } from "@/components/auth/StageIndicator";
 import { ApiError } from "@/lib/api";
+import { getUserFromToken } from "@/lib/auth/jwt";
+import { useAuthStore } from "@/store/auth.store";
 
 type VerificationStep = "email" | "phone" | "complete";
 
 function VerifyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setUser } = useAuthStore();
   const email = searchParams.get("email");
   const phone = searchParams.get("phone");
   const sessionToken = searchParams.get("session");
@@ -90,10 +93,25 @@ function VerifyPageContent() {
               try {
                 const tokens =
                   await authApi.completeLoginAfterVerification(userId);
-                localStorage.setItem("accessToken", tokens.accessToken);
-                localStorage.setItem("refreshToken", tokens.refreshToken);
-                toast.success("Verification complete! Logging you in...");
-                router.push("/dashboard");
+
+                // Backend sets httpOnly cookies automatically - no localStorage needed!
+
+                // Extract user info from JWT and update Zustand store
+                const user = getUserFromToken(tokens.accessToken);
+                if (user?.sub) {
+                  setUser({
+                    id: user.sub,
+                    email: user.email,
+                    userType: user.userType,
+                    onboardingCompleted: user.onboardingCompleted,
+                  });
+                  toast.success("Verification complete! Logging you in...");
+                  router.push(`/dashboard/${user.sub}`);
+                } else {
+                  // If unable to extract user ID, something is wrong - redirect to login
+                  toast.error("Authentication error. Please login again.");
+                  router.push("/auth/login");
+                }
               } catch (error) {
                 toast.error("Failed to login. Please try again.");
                 router.push("/auth/login");

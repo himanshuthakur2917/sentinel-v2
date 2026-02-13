@@ -25,6 +25,8 @@ export interface LoginVerificationSession {
 export class OtpService {
   private readonly codeLength: number;
   private readonly expiryMinutes: number;
+  private readonly expirySeconds: number; // For login OTP
+  private readonly resendCooldownSeconds: number;
   private readonly maxAttempts: number;
 
   constructor(
@@ -37,6 +39,10 @@ export class OtpService {
     this.codeLength = this.configService.get<number>('otp.codeLength') || 6;
     this.expiryMinutes =
       this.configService.get<number>('otp.expiryMinutes') || 5;
+    this.expirySeconds =
+      this.configService.get<number>('otp.expirySeconds') || 90;
+    this.resendCooldownSeconds =
+      this.configService.get<number>('otp.resendCooldownSeconds') || 30;
     this.maxAttempts = this.configService.get<number>('otp.maxAttempts') || 3;
   }
 
@@ -131,7 +137,7 @@ export class OtpService {
    * Send login OTP to a single identifier (email or phone)
    * @param identifier - Email or phone number
    * @param type - Type of identifier
-   * @param customTtlSeconds - Optional custom TTL in seconds (default: expiryMinutes * 60)
+   * @param customTtlSeconds - Optional custom TTL in seconds (default: expirySeconds from config)
    */
   async sendLoginOtp(
     identifier: string,
@@ -140,7 +146,8 @@ export class OtpService {
   ): Promise<{ sessionToken: string; expiresAt: string }> {
     const sessionToken = this.generateSessionToken();
     const code = this.generateCode();
-    const ttlSeconds = customTtlSeconds ?? this.expiryMinutes * 60;
+    // Use expirySeconds (from OTP_EXPIRY_SECONDS env) for login OTP by default
+    const ttlSeconds = customTtlSeconds ?? this.expirySeconds;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
     // Store code in Redis

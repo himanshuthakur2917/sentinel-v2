@@ -75,6 +75,15 @@ export interface OnboardingRequest {
   language?: "en" | "hi";
 }
 
+export interface UpdateProfileRequest {
+  userName: string;
+  userType: "student" | "working_professional" | "team_manager";
+  country: string;
+  timezone: string;
+  theme?: "light" | "dark" | "system";
+  language?: "en" | "hi";
+}
+
 export interface CurrentUser {
   sub: string;
   email: string;

@@ -30,11 +30,18 @@ import {
   DEFAULT_COUNTRY_CODE,
 } from "@/lib/constants/country-codes";
 import { authApi } from "@/lib/api";
+import { getUserFromToken } from "@/lib/auth/jwt";
+import { useAuthStore } from "@/store/auth.store";
 
 type IdentifierType = "email" | "phone";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { setUser } = useAuthStore();
+
+  // Read callback URL from query params (from middleware redirect)
+  const callbackUrl = searchParams.get("callbackUrl");
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [identifierType, setIdentifierType] = useState<IdentifierType>("email");
   const [email, setEmail] = useState("");
@@ -53,10 +60,10 @@ export default function LoginPage() {
       if (data.requiresVerification) {
         toast.warning("Please complete email and phone verification first");
         const params = new URLSearchParams({
-          userId: data.requiresVerification ? data.userId : "",
-          session: data.sessionToken || "", // Pass session token
-          email: data.email || "",
-          phone: data.phone || "",
+          userId: data.userId ?? "",
+          session: data.sessionToken ?? "",
+          email: data.email ?? "",
+          phone: data.phone ?? "",
           fromLogin: "true",
         });
         router.push(`/auth/verify?${params.toString()}`);
@@ -77,10 +84,36 @@ export default function LoginPage() {
   const verifyLoginMutation = useMutation({
     mutationFn: authApi.verifyLogin,
     onSuccess: (data) => {
-      localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
+      // Backend sets httpOnly cookies automatically - no localStorage needed!
       toast.success("Login successful!");
-      router.push("/dashboard");
+
+      // Extract user info from JWT and update Zustand store
+      const user = getUserFromToken(data.accessToken);
+      if (user?.sub) {
+        setUser({
+          id: user.sub,
+          email: user.email,
+          userType: user.userType,
+          onboardingCompleted: user.onboardingCompleted,
+        });
+
+        // Handle callback URL redirect
+        if (callbackUrl) {
+          // Validate callback URL to prevent open redirects
+          // Only allow relative URLs starting with /
+          if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
+            router.push(callbackUrl);
+            return;
+          }
+        }
+
+        // Default redirect to dashboard
+        router.push(`/dashboard/${user.sub}`);
+      } else {
+        // If unable to extract user ID, something is wrong - redirect to login
+        toast.error("Authentication error. Please login again.");
+        router.push("/auth/login");
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Invalid OTP. Please try again.");

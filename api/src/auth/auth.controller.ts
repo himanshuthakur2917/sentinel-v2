@@ -17,6 +17,7 @@ import {
   LoginDto,
   VerifyLoginDto,
   ResendOtpDto,
+  UpdateProfileDto,
 } from './dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -109,6 +110,32 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthTokens> {
     const tokens = await this.authService.completeOnboarding(dto);
+    this.setAuthCookies(response, tokens);
+    return tokens;
+  }
+
+  /**
+   * POST /auth/update-profile
+   * Update user profile for authenticated users (completing onboarding after login)
+   * Uses JWT authentication from cookies instead of session token
+   */
+  @Post('update-profile')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @AuditLog({ action: 'PROFILE_UPDATE', resource: 'auth', persist: true })
+  async updateProfile(
+    @CurrentUser('sub') userId: string,
+    @Body() dto: UpdateProfileDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthTokens> {
+    const tokens = await this.authService.updateProfile(userId, {
+      userName: dto.userName,
+      userType: dto.userType,
+      country: dto.country,
+      timezone: dto.timezone,
+      theme: dto.theme,
+      language: dto.language,
+    });
     this.setAuthCookies(response, tokens);
     return tokens;
   }
