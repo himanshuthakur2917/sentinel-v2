@@ -7,31 +7,11 @@ import type {
   VerifyLoginRequest,
   AuthTokens,
   OnboardingRequest,
-  CurrentUser,
   ResendOtpRequest,
   ResendOtpResponse,
+  RegisterResponse,
+  LoginResponse,
 } from "./types";
-
-// Register - returns sessionToken and userId now
-export interface RegisterResponse {
-  sessionToken: string;
-  userId: string;
-  expiresAt: string;
-}
-
-// Login - can return verification requirement
-export interface LoginResponse {
-  sessionToken?: string;
-  identifier?: string;
-  type?: "email" | "phone";
-  expiresAt?: string;
-  requiresVerification?: boolean;
-  userId?: string;
-  emailVerified?: boolean;
-  phoneVerified?: boolean;
-  email?: string;
-  phone?: string;
-}
 
 export const authApi = {
   /**
