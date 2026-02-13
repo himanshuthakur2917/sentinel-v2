@@ -45,10 +45,16 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  sessionToken: string;
-  identifier: string;
-  type: "email" | "phone";
-  expiresAt: string;
+  sessionToken?: string;
+  identifier?: string;
+  type?: "email" | "phone";
+  expiresAt?: string;
+  requiresVerification?: boolean;
+  userId?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  email?: string;
+  phone?: string;
 }
 
 export interface VerifyLoginRequest {
