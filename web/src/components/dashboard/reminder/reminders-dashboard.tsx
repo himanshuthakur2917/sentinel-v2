@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import ReminderCard from "@/components/reminder-card";
+import { ReminderCard } from "@/components/reminder-card";
 import { Reminder } from "@/types/reminder";
 import { Button } from "@/components/ui/button";
 
@@ -13,139 +13,6 @@ const addDays = (date: Date, days: number) => {
   return result;
 };
 
-const mockReminders: Reminder[] = [
-  // Today's Reminders
-  {
-    id: "1",
-    title: "Mites & Lice Treatment",
-    category: "personal",
-    priority: "high",
-    initial_deadline: new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      18,
-      0,
-    ), // Today 6 PM
-    completion_status: "completed",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "weekly",
-  },
-  {
-    id: "2",
-    title: "Refill Water",
-    category: "personal",
-    priority: "medium",
-    initial_deadline: new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      10,
-      0,
-    ), // Today 10 AM
-    completion_status: "pending",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "daily",
-  },
-  {
-    id: "3",
-    title: "Replace Bedding",
-    category: "personal",
-    priority: "medium",
-    initial_deadline: new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      21,
-      0,
-    ), // Today 9 PM
-    completion_status: "pending",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "weekly",
-  },
-  {
-    id: "3b",
-    title: "Walk the Dog",
-    category: "personal",
-    priority: "low",
-    initial_deadline: new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      7,
-      0,
-    ), // Today 7 AM
-    completion_status: "pending",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "daily",
-  },
-
-  // This Week's Reminders (Tomorrow onwards)
-  {
-    id: "4",
-    title: "Worming Treatment",
-    category: "health",
-    priority: "high",
-    initial_deadline: addDays(now, 2), // 2 days from now
-    completion_status: "pending",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "monthly",
-  },
-  {
-    id: "5",
-    title: "Grocery Shopping",
-    category: "personal",
-    priority: "medium",
-    initial_deadline: addDays(now, 3), // 3 days from now
-    completion_status: "pending",
-    is_team_reminder: false,
-    is_recurring: true,
-    recurrence_pattern: "weekly",
-  },
-  {
-    id: "5b",
-    title: "Call Mom",
-    category: "personal",
-    priority: "medium",
-    initial_deadline: addDays(now, 4),
-    completion_status: "pending",
-    is_team_reminder: false,
-  },
-  {
-    id: "5c",
-    title: "Gym Session",
-    category: "health",
-    priority: "medium",
-    initial_deadline: addDays(now, 5),
-    completion_status: "pending",
-    is_team_reminder: false,
-  },
-
-  // This Month's Reminders (Next week onwards)
-  {
-    id: "6",
-    title: "Car Service",
-    category: "personal",
-    priority: "high",
-    initial_deadline: addDays(now, 10), // 10 days from now
-    completion_status: "pending",
-    is_team_reminder: false,
-  },
-  {
-    id: "7",
-    title: "Pay Bills",
-    category: "personal",
-    priority: "high",
-    initial_deadline: addDays(now, 15), // 15 days from now
-    completion_status: "pending",
-    is_team_reminder: false,
-  },
-];
 
 // --- Helper Functions ---
 

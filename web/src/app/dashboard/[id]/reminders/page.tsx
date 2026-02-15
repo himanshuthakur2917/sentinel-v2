@@ -4,15 +4,19 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reminderApi } from "@/lib/api/reminders.api";
 import { Reminder } from "@/types/reminder";
-import ReminderCard from "@/components/reminder-card";
+import { ReminderCard } from "@/components/reminder-card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useReminderSubscription } from "@/hooks/use-reminder-subscription";
 
 export default function RemindersPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Subscribe to real-time reminder updates
+  useReminderSubscription();
 
   const { data: reminders, isLoading } = useQuery<Reminder[]>({
     queryKey: ["reminders"],

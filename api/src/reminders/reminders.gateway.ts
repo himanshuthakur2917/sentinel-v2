@@ -72,10 +72,7 @@ export class RemindersGateway
             'RemindersGateway',
           );
 
-          // Broadcast to all connected clients
-          // In a real app, you might want to filter this by user_id
-          // payload.new contains the new record, including user_id
-
+          // Broadcast to all connected clients AND user-specific rooms
           const eventMap = {
             INSERT: 'reminder:created',
             UPDATE: 'reminder:updated',
@@ -84,7 +81,20 @@ export class RemindersGateway
 
           const event = eventMap[payload.eventType];
           if (event) {
-            this.server.emit(event, payload.new || payload.old);
+            const data = payload.new || payload.old;
+
+            // Emit to all clients (global broadcast)
+            this.server.emit(event, data);
+
+            // Emit to user-specific room if user_id exists
+            if (data && 'user_id' in data && data.user_id) {
+              const userId = String(data.user_id);
+              this.server.to(`user:${userId}`).emit(event, data);
+              this.auditService.debug(
+                `Emitted ${event} to user:${userId}`,
+                'RemindersGateway',
+              );
+            }
           }
         },
       )
@@ -92,6 +102,17 @@ export class RemindersGateway
 
     this.auditService.success(
       'Subscribed to Supabase reminders changes',
+      'RemindersGateway',
+    );
+  }
+
+  /**
+   * Allow clients to join their user-specific room
+   */
+  joinUserRoom(client: Socket, userId: string) {
+    client.join(`user:${userId}`);
+    this.auditService.debug(
+      `Client ${client.id} joined room user:${userId}`,
       'RemindersGateway',
     );
   }

@@ -46,6 +46,13 @@ export const reminderApi = {
   },
 
   /**
+   * Get a single reminder by ID
+   */
+  getById: async (id: string): Promise<Reminder> => {
+    return httpClient.get<Reminder>(`/reminders/${id}`);
+  },
+
+  /**
    * Update a reminder
    */
   update: async (
@@ -67,9 +74,14 @@ export const reminderApi = {
    */
   processVoiceCommand: async (
     audioBlob: Blob,
+    language?: string,
   ): Promise<Partial<CreateReminderRequest>> => {
     const formData = new FormData();
     formData.append("audio", audioBlob, "recording.webm");
+    formData.append("clientTime", new Date().toString());
+    if (language) {
+      formData.append("language", language);
+    }
     return httpClient.post<Partial<CreateReminderRequest>>(
       "/reminders/voice",
       formData,

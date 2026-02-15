@@ -22,25 +22,37 @@ import { toast } from "sonner";
 
 interface ManualInputFormProps {
   initialData?: Partial<Reminder>;
-  onBack: () => void;
-  onClose: () => void;
+  onBack?: () => void;
+  onClose?: () => void;
+  onProceed?: (data: CreateReminderRequest) => void;
 }
 
 export function ManualInputForm({
   initialData,
   onBack,
   onClose,
+  onProceed,
 }: ManualInputFormProps) {
   const [formData, setFormData] = React.useState<Partial<Reminder>>({
     title: "",
     description: "",
     category: "personal",
     priority: "medium",
-    initial_deadline: new Date(),
+    initial_deadline: initialData?.initial_deadline ? new Date(initialData.initial_deadline) : new Date(),
     is_recurring: false,
     recurrence_pattern: "daily",
     ...initialData,
+    // Ensure deadline is a Date object even if initialData overrides it with a string
+    initial_deadline: initialData?.initial_deadline ? new Date(initialData.initial_deadline) : new Date(),
   });
+
+  React.useEffect(() => {
+    console.log('[ManualInputForm] Initial Data Received:', initialData);
+    if (initialData?.initial_deadline) {
+        console.log('[ManualInputForm] Parsed Date:', new Date(initialData.initial_deadline).toString());
+        console.log('[ManualInputForm] Raw Date String:', initialData.initial_deadline);
+    }
+  }, [initialData]);
 
   const queryClient = useQueryClient();
 

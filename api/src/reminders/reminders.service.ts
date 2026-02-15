@@ -126,7 +126,7 @@ export class RemindersService {
         currentCompleted,
         previousCompleted,
       ),
-      completionRateTrend: Number((currentRate - previousRate).toFixed(1)), // Absolute % difference for rates is usually better, or relative? Let's do difference for rates.
+      completionRateTrend: calculateTrend(currentRate, previousRate),
       pointsEarnedTrend: pointsTrend,
     };
   }
@@ -348,15 +348,15 @@ export class RemindersService {
   }
 
   /**
-   * Delete a reminder
+   * Delete a reminder (hard delete)
    */
   async delete(userId: string, id: string) {
     const client = this.supabaseService.getClient();
 
-    // Soft delete by setting completion_status to 'deleted'
+    // Hard delete - actually remove the record
     const { error } = await client
       .from('reminders')
-      .update({ completion_status: 'deleted' })
+      .delete()
       .eq('id', id)
       .eq('user_id', userId);
 
@@ -367,6 +367,11 @@ export class RemindersService {
       );
       throw error;
     }
+
+    this.auditService.success(
+      `Reminder ${id} deleted successfully`,
+      'RemindersService',
+    );
 
     return { success: true };
   }

@@ -67,7 +67,13 @@ export function VoiceInputForm({ onBack, onProceed }: VoiceInputFormProps) {
   };
 
   const startRecording = async () => {
+    console.log("Start recording clicked");
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          toast.error("Audio recording is not supported in this browser or context (requires HTTPS).");
+          return;
+      }
+      
       const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
@@ -124,7 +130,8 @@ export function VoiceInputForm({ onBack, onProceed }: VoiceInputFormProps) {
     setIsProcessing(true);
 
     try {
-      const result = await reminderApi.processVoiceCommand(audioBlob);
+      // Language parameter: undefined = auto-detect (default), 'en' = English, 'hi' = Hindi
+      const result = await reminderApi.processVoiceCommand(audioBlob, undefined);
       // toast.success("Voice command processed successfully!"); // Optional: Let UI speak for itself
       onProceed(result); 
     } catch (error: any) {
@@ -184,7 +191,7 @@ export function VoiceInputForm({ onBack, onProceed }: VoiceInputFormProps) {
       </div>
 
       {/* Visualizer / Interaction Area */}
-      <div className="flex-1 flex items-center justify-center w-full my-8 relative z-10">
+      <div className="flex-1 flex flex-col items-center justify-center w-full my-8 relative z-10">
         {isRecording ? (
             <div className="flex items-end justify-center gap-1.5 h-32 w-full px-12">
                 {audioLevel.map((height, i) => (
@@ -196,16 +203,16 @@ export function VoiceInputForm({ onBack, onProceed }: VoiceInputFormProps) {
                 ))}
             </div>
         ) : (
-             <div className="relative group">
+             <div className="relative group flex flex-col items-center gap-4">
                  {/* Ripple Effect hint */}
                  {!isProcessing && (
-                     <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping opacity-0 group-hover:opacity-50 duration-1000" />
+                     <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping opacity-0 group-hover:opacity-50 duration-1000 pointer-events-none" style={{ width: '6rem', height: '6rem', top: 0 }} />
                  )}
                  
                  <Button
                     size="icon"
                     className={cn(
-                        "h-24 w-24 rounded-full shadow-2xl transition-all duration-300 transform",
+                        "h-24 w-24 rounded-full shadow-2xl transition-all duration-300 transform relative z-10",
                         isProcessing ? "opacity-100 scale-90 bg-muted text-muted-foreground" : "hover:scale-105 bg-gradient-to-tr from-primary to-primary/80 hover:shadow-primary/25"
                     )}
                     onClick={startRecording}
@@ -217,6 +224,22 @@ export function VoiceInputForm({ onBack, onProceed }: VoiceInputFormProps) {
                         <Mic className="h-10 w-10 text-primary-foreground" />
                     )}
                 </Button>
+
+                {/* DEBUG PLAYBACK */}
+                {chunksRef.current.length > 0 && !isProcessing && (
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+                            const url = URL.createObjectURL(blob);
+                            const audio = new Audio(url);
+                            audio.play();
+                        }}
+                        className="text-xs text-muted-foreground hover:text-primary underline"
+                    >
+                        Play Last Recording (Debug)
+                    </button>
+                )}
             </div>
         )}
 

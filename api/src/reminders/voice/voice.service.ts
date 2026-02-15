@@ -30,6 +30,8 @@ export class VoiceService {
   async processVoiceCommand(
     userId: string,
     file: Express.Multer.File,
+    clientTime?: string,
+    language?: string,
   ): Promise<Partial<CreateReminderDto>> {
     if (!this.openai) {
       throw new Error('AI service is not configured');
@@ -39,10 +41,43 @@ export class VoiceService {
     await this.checkGlobalTokenLimit();
 
     // 2. Transcribe Audio (Whisper)
-    const transcript = await this.transcribeAudio(file);
+    const transcript = await this.transcribeAudio(file, language);
+    this.logger.debug(`Transcription Result: "${transcript}"`);
+
+    // Filter hallucinations
+    const cleanTranscript = transcript
+      .trim()
+      .toLowerCase()
+      .replace(/[.,!?]/g, '');
+    const hallucinations = [
+      'you',
+      'thank you',
+      'subtitle by',
+      'mbc',
+      'subs by',
+    ];
+
+    if (
+      !transcript ||
+      transcript.length < 2 ||
+      hallucinations.some(
+        (h) => cleanTranscript.includes(h) && cleanTranscript.length < 20,
+      )
+    ) {
+      this.logger.warn(
+        `Discarding hallucination/empty transcript: "${transcript}"`,
+      );
+      throw new Error(
+        'No speech detected. Please speak clearly into the microphone.',
+      );
+    }
 
     // 3. Interpret Command (GPT-4)
-    const interpretedData = await this.interpretCommand(transcript);
+    const interpretedData = await this.interpretCommand(
+      transcript,
+      clientTime,
+      language,
+    );
 
     // 4. Log Usage
     // Estimate tokens: 1 word ~= 1.3 tokens. Very rough, but usable for transcript + prompt + output.
@@ -53,7 +88,7 @@ export class VoiceService {
       userId,
       estimatedTokens,
       'voice-reminder',
-      'gpt-4',
+      'gpt-4o',
     );
 
     // 5. Terminal Logging (User Request)
@@ -77,7 +112,9 @@ export class VoiceService {
     const RED = '\x1b[31m';
 
     console.log(`\n${CYAN}==========================================${RESET}`);
-    console.log(`${BRIGHT}${YELLOW}[AI USAGE REPORT] ${RESET}| ${timestamp}`);
+    console.log(
+      `${BRIGHT}${YELLOW}[OpenAI API USAGE REPORT] ${RESET}| ${timestamp}`,
+    );
     console.log(`${CYAN}==========================================${RESET}`);
     console.log(
       `${GREEN}Request Usage    :${RESET} ${currentRequestTokens} tokens`,
@@ -112,7 +149,10 @@ export class VoiceService {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return (
-      data?.reduce((acc: number, curr: any) => acc + curr.tokens_used, 0) || 0
+      data?.reduce(
+        (acc: number, curr: { tokens_used: number }) => acc + curr.tokens_used,
+        0,
+      ) || 0
     );
   }
 
@@ -127,19 +167,24 @@ export class VoiceService {
     }
   }
 
-  private async transcribeAudio(file: Express.Multer.File): Promise<string> {
+  private async transcribeAudio(
+    file: Express.Multer.File,
+    language?: string,
+  ): Promise<string> {
     try {
       if (!this.openai) throw new Error('OpenAI not initialized');
       // Create a readable stream from the buffer
       const audioReadStream = Readable.from(file.buffer);
 
       // Hack to make the stream look like a file to OpenAI
-      // @ts-expect-error - OpenAI SDK needs a path on the stream to confirm file type
-      audioReadStream.path = 'upload.webm';
+      (audioReadStream as any).path = 'upload.webm';
 
       const response = await this.openai.audio.transcriptions.create({
         file: audioReadStream as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         model: 'whisper-1',
+        // Language hint improves accuracy. If not provided, Whisper auto-detects.
+        // Supports: 'en' (English), 'hi' (Hindi), and 90+ other languages
+        ...(language && { language }),
       });
 
       return response.text;
@@ -154,9 +199,14 @@ export class VoiceService {
 
   private async interpretCommand(
     transcript: string,
+    clientTime?: string,
+    language?: string,
   ): Promise<Partial<CreateReminderDto>> {
+    const referenceTime = clientTime || new Date().toISOString();
+    const isHindi = language === 'hi';
+
     const systemPrompt = `
-      You are an AI assistant that extracts reminder details from voice commands.
+      You are a multilingual AI assistant that extracts reminder details from voice commands in English and Hindi.
       Extract the following fields into a JSON object matching the TypeScript interface below:
 
       interface CreateReminderDto {
@@ -169,23 +219,68 @@ export class VoiceService {
         recurrence_pattern?: 'daily' | 'weekdays' | 'weekends' | 'weekly' | 'monthly' | string;
       }
 
-      Current Time: ${new Date().toISOString()}
+      Current User Time (Wall-Clock with Timezone): "${referenceTime}"
+      
+      Timezone Handling Rules:
+      1. The "Current User Time" provided above is the GROUND TRUTH.
+      2. If the user says "at 8pm" or "शाम 8 बजे", they mean 8pm in THEIR timezone.
+      3. CAREFULLY calculate the target time based on the Current User Time.
+      4. Output the 'initial_deadline' as a standard ISO 8601 string (e.g., YYYY-MM-DDTHH:mm:ss.sssZ).
+      5. IMPORTANT: You must convert the user's local target time to UTC correctly before generating the ISO output.
+      6. Example: If User Time is "Mon Feb 15 2026 20:00:00 GMT+0530" and they say "at 9pm", the target is 21:00:00 IST. You must convert 21:00 IST to UTC (which is 15:30 UTC) and output that.
+
+      ${
+        isHindi
+          ? `
+      Hindi Time Expressions (convert to 24-hour format):
+      - सुबह (subah) = morning → 9:00 AM
+      - दोपहर (dopahar) = afternoon → 2:00 PM
+      - शाम (shaam) = evening → 6:00 PM
+      - रात (raat) = night → 8:00 PM
+      - आधी रात (aadhi raat) = midnight → 12:00 AM
+      
+      Hindi Date Expressions:
+      - आज (aaj) = today
+      - कल (kal) = tomorrow
+      - परसों (parson) = day after tomorrow
+      - अगले हफ्ते (agle hafte) = next week (+7 days)
+      - अगले महीने (agle mahine) = next month
+      - सोमवार (somvar) = Monday
+      - मंगलवार (mangalvar) = Tuesday
+      - बुधवार (budhvar) = Wednesday
+      - गुरुवार (guruvar) = Thursday
+      - शुक्रवार (shukravar) = Friday
+      - शनिवार (shanivar) = Saturday
+      - रविवार (ravivar) = Sunday
+      
+      Hindi Category Keywords:
+      - काम/ऑफिस (kaam/office) → 'work'
+      - स्वास्थ्य/डॉक्टर (swasthya/doctor) → 'health'
+      - निजी/व्यक्तिगत (niji/vyaktigat) → 'personal'
+      `
+          : ''
+      }
 
       Rules:
-      - If no time is specified, default to tomorrow at 9:00 AM.
+      - Accept commands in BOTH English and Hindi (or mix of both - Hinglish)
+      - If no time is specified, default to next morning at 9:00 AM relative to user time.
       - If category is unclear, use 'personal'.
-      - Be intelligent about inferring priority (e.g., "urgent", "important" -> 'high').
+      - Be intelligent about inferring priority (e.g., "urgent"/"जरूरी", "important"/"महत्वपूर्ण" -> 'high').
       - Return ONLY the raw JSON object. No markdown, no code blocks.
+      - Keep the title in the original language of the command.
     `;
 
     try {
       if (!this.openai) throw new Error('OpenAI not initialized');
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: transcript },
+          {
+            role: 'user',
+            content: `[User's Context Time: ${referenceTime}] Voice Command: "${transcript}"`,
+          },
         ],
         temperature: 0,
       });
@@ -224,7 +319,7 @@ export class VoiceService {
     });
 
     if (error) {
-      this.logger.error('Failed to log token usage', error);
+      this.logger.error(`Failed to log token usage: ${error.message}`, error);
       // Don't throw here, just log error. User shouldn't be blocked if logging fails.
     }
   }

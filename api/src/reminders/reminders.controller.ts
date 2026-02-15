@@ -45,6 +45,16 @@ export class RemindersController {
   }
 
   /**
+   * GET /reminders/:id
+   * Get a single reminder by ID
+   * IMPORTANT: Must come before GET / to avoid route conflicts
+   */
+  @Get(':id')
+  async findOne(@CurrentUser('sub') userId: string, @Param('id') id: string) {
+    return this.remindersService.findOne(userId, id);
+  }
+
+  /**
    * GET /reminders
    * Get user's reminders with optional filter
    * @param filter - 'all' | 'today' | 'overdue' | 'upcoming'
@@ -67,15 +77,6 @@ export class RemindersController {
     @Body() createReminderDto: CreateReminderDto,
   ) {
     return this.remindersService.create(userId, createReminderDto);
-  }
-
-  /**
-   * GET /reminders/:id
-   * Get a single reminder
-   */
-  @Get(':id')
-  async findOne(@CurrentUser('sub') userId: string, @Param('id') id: string) {
-    return this.remindersService.findOne(userId, id);
   }
 
   /**

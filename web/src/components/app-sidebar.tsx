@@ -66,16 +66,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center">
                 <Image
                   src="/icon/sentinel-logo.png"
                   alt="Sentinel Logo"
-                  className="invert border"
-                  width={32}
-                  height={32}
+                  className="lighth:invert"
+                  width={40}
+                  height={40}
                 />
-                <span className="text-xl border font-bold font-sans">
-                  entinel
+                <span className="text-xl tracking-[.4rem] font-bold font-logo z-10 translate-x-[-.5rem]">
+                  ENTINEL
                 </span>
               </div>
             </SidebarMenuButton>

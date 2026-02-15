@@ -1,6 +1,8 @@
+"use client"
 import * as React from "react";
 import { Check, ChevronRight } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -19,9 +21,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
-export default function ReminderCard({ reminder }: { reminder: Reminder }) {
+export function ReminderCard({ reminder }: { reminder: Reminder }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const date = new Date(reminder.initial_deadline);
   const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
     date,
@@ -45,6 +49,7 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
     : "";
 
   const isCompleted = reminder.completion_status === "completed";
+  const isOverdue = !isCompleted && new Date() > new Date(reminder.initial_deadline);
 
   const markCompleteMutation = useMutation({
     mutationFn: async () => {
@@ -64,18 +69,35 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
     },
   });
 
+  const handleCardClick = () => {
+    // Use the user ID from the store
+    const userId = (reminder as any).user_id || window.location.pathname.split('/')[2];
+    router.push(`/dashboard/${userId}/reminders/${reminder.id}`);
+  };
+
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click when clicking checkbox
+  };
+
   return (
     <Card
+      onClick={handleCardClick}
       className={cn(
-        "overflow-hidden border-none shadow-sm ring-1 ring-border bg-card justify-between transition-opacity duration-300",
-        isCompleted && "opacity-60 grayscale-[0.5]"
+        "overflow-hidden border-none shadow-sm ring-1 ring-border bg-card justify-between transition-all duration-300 relative cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/50",
+        isCompleted && "opacity-60 grayscale-[0.5]",
+        isOverdue && !isCompleted && "ring-red-500/50 bg-red-50/50 dark:bg-red-950/10"
       )}
     >
       <div className="p-4 flex flex-col gap-3">
         {/* Header Row: Date Box + Title */}
         <div className="flex items-start gap-3">
           {/* Date Box */}
-          <div className="flex flex-col items-center justify-center bg-primary text-primary-foreground rounded-lg min-w-14 h-14 p-1 shadow-sm">
+          <div className={cn(
+            "flex flex-col items-center justify-center rounded-lg min-w-14 h-14 p-1 shadow-sm transition-colors",
+            isOverdue 
+              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" 
+              : "bg-primary text-primary-foreground"
+          )}>
             <span className="text-xs font-medium uppercase leading-none">
               {dayName}
             </span>
@@ -86,14 +108,28 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
 
           {/* Title & Time */}
           <div className="flex-1 min-w-0 flex flex-col justify-center h-14">
-            <h3
-              className="font-semibold text-foreground truncate pr-2"
-              title={reminder.title}
-            >
-              {reminder.title}
-            </h3>
-            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-              <span>at {timeString}</span>
+            <div className="flex items-center gap-2 mb-1">
+                <h3
+                className="font-semibold text-foreground truncate pr-2 max-w-[200px]"
+                title={reminder.title}
+                >
+                {reminder.title}
+                </h3>
+                {isOverdue && (
+                    <Badge variant="destructive" className="h-5 px-1.5 text-[0.65rem] rounded-sm">
+                        Overdue
+                    </Badge>
+                )}
+            </div>
+            
+            <div className="text-xs text-muted-foreground flex items-center gap-2">
+              <span className={cn(isOverdue && "text-red-600 font-medium")}>
+                {timeString}
+              </span>
+              <span className="text-border">|</span>
+              <Badge variant="outline" className="h-4 px-1.5 text-[0.60rem] font-normal uppercase tracking-wide opacity-80">
+                {reminder.category}
+              </Badge>
             </div>
           </div>
 
