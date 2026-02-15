@@ -33,11 +33,15 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { ProfileDialog } from "@/components/profile-dialog"
 
+
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { user, logout } = useAuthStore()
   const router = useRouter()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+
+
+
 
   console.log(user)
 

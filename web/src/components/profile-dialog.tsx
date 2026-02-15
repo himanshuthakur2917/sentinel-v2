@@ -74,10 +74,15 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
         userName: user.userName || "",
         email: user.email || "",
         userType: user.userType || "student",
-        country: user.country || "", // assuming these fields exist on User interface in store
+        country: user.country || "",
         timezone: user.timezone || "",
       });
-      setIsEditing(false); // Reset editing state on open
+      // Force editing mode if onboarding is not completed
+      if (!user.onboardingCompleted) {
+        setIsEditing(true);
+      } else {
+        setIsEditing(false);
+      }
     }
   }, [open, user, form]);
 
@@ -111,6 +116,13 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
             View and update your personal information.
           </DialogDescription>
         </DialogHeader>
+
+        {!user?.onboardingCompleted && (
+          <div className="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 px-4 py-3 rounded-md text-sm mb-4">
+            <p className="font-semibold">Profile Incomplete</p>
+            <p>Please complete your profile details to continue using the application.</p>
+          </div>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

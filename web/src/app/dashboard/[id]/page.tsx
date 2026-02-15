@@ -17,16 +17,16 @@ export default function DashboardPage() {
 
   const [userType, setUserType] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Derived state for dialog visibility
+  const showOnboarding = !loading && user && !user.onboardingCompleted;
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         // If user is already in store, use it
         if (user) {
-          console.log("Dashboar :",user)
           setUserType(user.userType);
-          setShowOnboarding(!user.onboardingCompleted);
           setLoading(false);
           return;
         }
@@ -42,10 +42,11 @@ export default function DashboardPage() {
           email: userData.email,
           userType: userData.user_type,
           onboardingCompleted: userData.onboarding_completed,
+          country: userData.country,
+          timezone: userData.timezone,
         });
 
         setUserType(userData.user_type);
-        setShowOnboarding(!userData.onboarding_completed);
         setLoading(false);
       } catch (error) {
         console.error("Dashboard auth check failed:", error);
@@ -61,10 +62,6 @@ export default function DashboardPage() {
 
     checkAuth();
   }, [router, user, setUser]);
-
-  const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-  };
 
   if (loading) {
     return (
@@ -84,8 +81,7 @@ export default function DashboardPage() {
   return (
     <>
       <OnboardingDialog
-        open={showOnboarding}
-        onComplete={handleOnboardingComplete}
+        open={!!showOnboarding}
       />
       <div className="flex flex-1 flex-col">
         <div className="@container/main flex flex-1 flex-col gap-2">

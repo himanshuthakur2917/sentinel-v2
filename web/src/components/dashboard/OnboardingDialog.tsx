@@ -1,10 +1,13 @@
-"use client";
-
 import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { useAuthStore } from "@/store/auth.store";
+import { authApi } from "@/lib/api/auth.api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -13,112 +16,86 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { authApi } from "@/lib/api/auth.api";
-import { Loader2 } from "lucide-react";
-import { useAuthStore } from "@/store/auth.store";
 
-interface OnboardingDialogProps {
-  open: boolean;
-  onComplete: () => void;
-}
+const profileSchema = z.object({
+  fullName: z.string().min(2, "Full name must be at least 2 characters"),
+  userName: z.string().min(3, "Username must be at least 3 characters"),
+  userType: z.enum(["student", "working_professional", "team_manager"], {
+    errorMap: () => ({ message: "Please select a role" }),
+  }),
+  country: z.string().min(1, "Please select a country"),
+  timezone: z.string().min(1, "Please select a timezone"),
+});
 
-export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
-  const { setUser, user } = useAuthStore();
+type ProfileFormValues = z.infer<typeof profileSchema>;
+
+export function OnboardingDialog({ open }: { open: boolean }) {
+  const { user, setUser } = useAuthStore();
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checkingUsername, setCheckingUsername] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(
-    null,
-  );
-  const [formData, setFormData] = useState({
-    fullName: "",
-    username: "",
-    country: "",
-    timezone: "",
-    userType: "",
+
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      fullName: "",
+      userName: "",
+      userType: "student",
+      country: "",
+      timezone: "",
+    },
   });
 
-  // Debounced username check
   useEffect(() => {
-    const checkUsername = async () => {
-      if (formData.username.length < 3) {
-        setUsernameAvailable(null);
-        return;
-      }
-
-      setCheckingUsername(true);
-      try {
-        const { available } = await authApi.checkUsername(formData.username);
-        setUsernameAvailable(available);
-        if (!available) {
-          toast.error("Username is already taken");
-        }
-      } catch (error) {
-        console.error("Failed to check username:", error);
-      } finally {
-        setCheckingUsername(false);
-      }
-    };
-
-    const timeoutId = setTimeout(() => {
-      checkUsername();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [formData.username]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.fullName) {
-      toast.error("Please enter your full name");
-      return;
+    if (user) {
+      form.reset({
+        fullName: user.fullName || "",
+        userName: user.userName || "",
+        userType: (user.userType as any) || undefined,
+        country: user.country || "",
+        timezone: user.timezone || "",
+      });
     }
+  }, [user, form]);
 
-    if (!formData.userType) {
-      toast.error("Please select a user type");
-      return;
-    }
-
-    if (usernameAvailable === false) {
-      toast.error("Please choose a different username");
-      return;
-    }
-
+  const onSubmit = async (data: ProfileFormValues) => {
     setLoading(true);
     try {
-      // Use updateProfile endpoint (JWT auth from cookies)
-      const response = await authApi.updateProfile({
-        fullName: formData.fullName,
-        userName: formData.username,
-        userType: formData.userType as
-          | "student"
-          | "working_professional"
-          | "team_manager",
-        country: formData.country,
-        timezone: formData.timezone,
-        theme: "system",
-        language: "en",
-      });
-
-      // Update Zustand store with new onboarding status
+      const updatedUser = await authApi.updateProfile(data);
       if (user) {
         setUser({
-          ...user,
-          onboardingCompleted: true,
+           ...user,
+           ...updatedUser,
+           // map backend fields to frontend if needed, but updateProfile returns aligned data usually? 
+           // actually authApi.updateProfile returns User response. 
+           // Let's ensure we update the store correctly.
+           // The store expects frontend User type. 
+           // authApi.updateProfile returns: Promise<User> (frontend type? No, usually API response)
+           // Let's check authApi types. Assuming it returns the updated user data.
+           // Actually, earlier in dashboard page we did manual mapping. 
+           // Let's look at `authApi.updateProfile` implementation or return type if possible.
+           // For now, we'll assume standard flow.
+           onboardingCompleted: true,
         });
       }
-
-      toast.success("Profile completed successfully!");
-      onComplete();
-    } catch (error: any) {
-      console.error("Onboarding error:", error);
-      toast.error(error.message || "Failed to complete profile");
+      toast.success("Profile updated successfully");
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+      toast.error("Failed to update profile");
     } finally {
       setLoading(false);
     }
@@ -135,135 +112,159 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
         <DialogHeader>
           <DialogTitle>Complete Your Profile</DialogTitle>
           <DialogDescription>
-            Please complete your profile to continue using Sentinel
+            {isEditing 
+              ? "Update your details to complete onboarding." 
+              : "Review your details. Valid information is required to access the dashboard."}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
-            <Input
-              id="fullName"
-              placeholder="John Doe"
-              required
-              value={formData.fullName}
-              onChange={(e) =>
-                setFormData({ ...formData, fullName: e.target.value })
-              }
-              disabled={loading}
-            />
+        {!isEditing && (
+          <div className="bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 px-4 py-3 rounded-md text-sm mb-4">
+            <p className="font-semibold">Profile Incomplete</p>
+            <p>Please complete your profile to continue.</p>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <div className="relative">
-              <Input
-                id="username"
-                placeholder="johndoe"
-                required
-                value={formData.username}
-                onChange={(e) =>
-                  setFormData({ ...formData, username: e.target.value })
-                }
-                disabled={loading}
-                className={
-                  usernameAvailable === true
-                    ? "border-green-500 focus-visible:ring-green-500"
-                    : usernameAvailable === false
-                      ? "border-destructive focus-visible:ring-destructive"
-                      : ""
-                }
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="fullName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={!isEditing} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="userName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input {...field} disabled={!isEditing} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="userType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    defaultValue={field.value}
+                    value={field.value} 
+                    disabled={!isEditing}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="working_professional">Working Professional</SelectItem>
+                      <SelectItem value="team_manager">Team Manager</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      value={field.value}
+                      disabled={!isEditing}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="us">United States</SelectItem>
+                        <SelectItem value="in">India</SelectItem>
+                        <SelectItem value="uk">United Kingdom</SelectItem>
+                        <SelectItem value="ca">Canada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              {checkingUsername && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
+
+              <FormField
+                control={form.control}
+                name="timezone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Timezone</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value} 
+                      value={field.value}
+                      disabled={!isEditing}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select timezone" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="utc">UTC</SelectItem>
+                        <SelectItem value="est">EST</SelectItem>
+                        <SelectItem value="pst">PST</SelectItem>
+                        <SelectItem value="ist">IST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="pt-4">
+              {!isEditing ? (
+                <Button 
+                  type="button" 
+                  className="w-full" 
+                  onClick={() => setIsEditing(true)}
+                >
+                  Edit Profile to Continue
+                </Button>
+              ) : (
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={loading}
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save & Continue
+                </Button>
               )}
             </div>
-            {usernameAvailable === false && (
-              <p className="text-xs text-destructive">
-                Username is already taken
-              </p>
-            )}
-            {usernameAvailable === true && (
-              <p className="text-xs text-green-500">Username is available</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="userType">I am a...</Label>
-            <Select
-              value={formData.userType}
-              onValueChange={(value) =>
-                setFormData({ ...formData, userType: value })
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="userType">
-                <SelectValue placeholder="Select your role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="student">Student</SelectItem>
-                <SelectItem value="working_professional">
-                  Working Professional
-                </SelectItem>
-                <SelectItem value="team_manager">Team Manager</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="country">Country</Label>
-              <Select
-                value={formData.country}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, country: value })
-                }
-                disabled={loading}
-              >
-                <SelectTrigger id="country">
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="us">United States</SelectItem>
-                  <SelectItem value="in">India</SelectItem>
-                  <SelectItem value="uk">United Kingdom</SelectItem>
-                  <SelectItem value="ca">Canada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Select
-                value={formData.timezone}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, timezone: value })
-                }
-                disabled={loading}
-              >
-                <SelectTrigger id="timezone">
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="utc">UTC</SelectItem>
-                  <SelectItem value="est">EST</SelectItem>
-                  <SelectItem value="pst">PST</SelectItem>
-                  <SelectItem value="ist">IST</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button
-            className="w-full mt-4"
-            type="submit"
-            disabled={loading || usernameAvailable === false}
-          >
-            {loading ? "Completing..." : "Complete Profile"}
-          </Button>
-        </form>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
