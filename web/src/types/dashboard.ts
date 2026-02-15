@@ -1,4 +1,3 @@
-// Dashboard Stats Types
 export interface DashboardStats {
   totalReminders: number;
   completedReminders: number;
@@ -6,6 +5,11 @@ export interface DashboardStats {
   completionRate: number;
   currentStreak: number;
   pointsEarned: number;
+  // Trend data
+  totalRemindersTrend: number;
+  completedRemindersTrend: number;
+  completionRateTrend: number;
+  pointsEarnedTrend: number;
 }
 
 export interface TeamMemberStats {

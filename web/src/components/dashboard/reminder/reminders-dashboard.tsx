@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import ReminderCard from "./reminder-card";
+import ReminderCard from "@/components/reminder-card";
 import { Reminder } from "@/types/reminder";
 import { Button } from "@/components/ui/button";
 

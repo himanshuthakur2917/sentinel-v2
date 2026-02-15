@@ -23,21 +23,21 @@ import {
 } from "@/components/ui/sidebar";
 import Image from "next/image";
 
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
+import { useParams } from "next/navigation";
+
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const params = useParams();
+  const userId = params.id as string;
+
+  const navMain = [
     {
       title: "Home",
-      url: "/dashboard",
+      url: `/dashboard/${userId}`,
       icon: IconHome,
     },
     {
-      title: "Lifecycle",
-      url: "#",
+      title: "Reminders",
+      url: `/dashboard/${userId}/reminders`,
       icon: IconListDetails,
     },
     {
@@ -55,10 +55,8 @@ const data = {
       url: "#",
       icon: IconUsers,
     },
-  ],
-};
+  ];
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -69,15 +67,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
               <div className="flex items-center gap-2">
-                <Image src="/icon/sentinel-logo.png" alt="Sentinel Logo" className="invert border" width={32} height={32} />
-                <span className="text-xl border font-bold font-sans">entinel</span>
+                <Image
+                  src="/icon/sentinel-logo.png"
+                  alt="Sentinel Logo"
+                  className="invert border"
+                  width={32}
+                  height={32}
+                />
+                <span className="text-xl border font-bold font-sans">
+                  entinel
+                </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

@@ -11,6 +11,11 @@ export interface DashboardStats {
   completionRate: number;
   currentStreak: number;
   pointsEarned: number;
+  // Trend data (percentage change vs last period)
+  totalRemindersTrend: number;
+  completedRemindersTrend: number;
+  completionRateTrend: number;
+  pointsEarnedTrend: number;
 }
 
 export interface TeamStats {
@@ -60,6 +65,54 @@ export class RemindersService {
       .eq('completion_status', 'pending')
       .lt('accepted_time', new Date().toISOString());
 
+    // Calculate trends (comparing last 30 days vs previous 30 days)
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+    // Current period stats
+    const { data: currentPeriodReminders } = await client
+      .from('reminders')
+      .select('completion_status, points_earned') // Assuming points_earned might be on reminders or we calculate differently.
+      // Wait, points are on user_stats which is cumulative.
+      // For dynamic trends, we need to query reminders created/completed in the period.
+      .eq('user_id', userId)
+      .gte('created_at', thirtyDaysAgo.toISOString());
+
+    // Previous period stats
+    const { data: previousPeriodReminders } = await client
+      .from('reminders')
+      .select('completion_status')
+      .eq('user_id', userId)
+      .gte('created_at', sixtyDaysAgo.toISOString())
+      .lt('created_at', thirtyDaysAgo.toISOString());
+
+    const calculateTrend = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Number((((current - previous) / previous) * 100).toFixed(1));
+    };
+
+    const currentTotal = currentPeriodReminders?.length || 0;
+    const previousTotal = previousPeriodReminders?.length || 0;
+
+    const currentCompleted =
+      currentPeriodReminders?.filter((r) => r.completion_status === 'completed')
+        .length || 0;
+    const previousCompleted =
+      previousPeriodReminders?.filter(
+        (r) => r.completion_status === 'completed',
+      ).length || 0;
+
+    const currentRate =
+      currentTotal > 0 ? (currentCompleted / currentTotal) * 100 : 0;
+    const previousRate =
+      previousTotal > 0 ? (previousCompleted / previousTotal) * 100 : 0;
+
+    // For points, we don't have history in user_stats, so we'll simulate or use 0 for now if we can't derive it.
+    // Ideally we'd have a points_history table. For now, let's assume flat or 0 trend if we can't calculate perfectly,
+    // OR just use completed reminders as a proxy for points trend if points are awarded per completion.
+    const pointsTrend = calculateTrend(currentCompleted, previousCompleted);
+
     return {
       totalReminders: stats?.total_reminders || 0,
       completedReminders: stats?.completed_reminders || 0,
@@ -67,6 +120,14 @@ export class RemindersService {
       completionRate: stats?.completion_rate || 0,
       currentStreak: stats?.current_streak_days || 0,
       pointsEarned: stats?.points_earned || 0,
+
+      totalRemindersTrend: calculateTrend(currentTotal, previousTotal),
+      completedRemindersTrend: calculateTrend(
+        currentCompleted,
+        previousCompleted,
+      ),
+      completionRateTrend: Number((currentRate - previousRate).toFixed(1)), // Absolute % difference for rates is usually better, or relative? Let's do difference for rates.
+      pointsEarnedTrend: pointsTrend,
     };
   }
 

@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSocket, disconnectSocket } from "@/lib/socket";
 import { reminderApi } from "@/lib/api/reminders.api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RemindersDashboard from "./reminder/reminders-dashboard";
+import { SectionCards } from "../section-cards";
 import type { DashboardStats } from "@/types/dashboard";
 import type { Reminder } from "@/types/reminder/reminder";
 
@@ -65,53 +65,33 @@ export function IndividualDashboard({ userId }: { userId: string }) {
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Completion Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {stats?.completionRate || 0}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.completedReminders}/{stats?.totalReminders} completed
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Current Streak
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              🔥 {stats?.currentStreak || 0} days
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Keep it going!</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Points Earned
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              ⭐ {stats?.pointsEarned || 0}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.overdueReminders} overdue reminders
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <SectionCards
+        cards={[
+          {
+            title: "Completion Rate",
+            value: `${stats?.completionRate || 0}%`,
+            trend: stats?.completionRateTrend || 0,
+            trendLabel: "from last 30 days",
+            footerLabel: `${stats?.completedReminders || 0}/${stats?.totalReminders || 0} completed`,
+          },
+          {
+            title: "Current Streak",
+            value: `${stats?.currentStreak || 0} days`,
+            trend: 0, // Streak trend is tricky, maybe 0 for now or diff
+            trendLabel: "Keep it going!",
+            footerLabel: "Consistency is key",
+          },
+          {
+            title: "Points Earned",
+            value: `⭐ ${stats?.pointsEarned || 0}`,
+            trend: stats?.pointsEarnedTrend || 0,
+            trendLabel: "from last 30 days",
+            footerLabel: `${stats?.overdueReminders || 0} overdue reminders`,
+          },
+          // Added a 4th card to match grid if needed or keep 3. The previous design had 3.
+          // The new SectionCards grid is responsive.
+        ]}
+      />
 
       {/* Reminders List */}
       {remindersLoading ? (

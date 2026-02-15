@@ -4,10 +4,10 @@ import { Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Reminder } from "@/types/reminder";
+import { Reminder } from "@/types/reminder/reminder";
 
 export default function ReminderCard({ reminder }: { reminder: Reminder }) {
-  const date = reminder.initial_deadline;
+  const date = new Date(reminder.initial_deadline);
   const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
     date,
   );
@@ -64,7 +64,7 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
               // Determine if this day is active based on recurrence pattern
               let isActive = false;
               const pattern = reminder.recurrence_pattern?.toLowerCase();
-              const deadlineDay = reminder.initial_deadline.getDay(); // 0 = Sunday
+              const deadlineDay = new Date(reminder.initial_deadline).getDay(); // 0 = Sunday
 
               if (pattern === "daily") {
                 isActive = true;

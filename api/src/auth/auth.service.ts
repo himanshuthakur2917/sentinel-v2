@@ -503,7 +503,7 @@ export class AuthService {
     }
 
     // ✅ UPDATE user with onboarding details (don't create)
-    const { error: updateError } = await client
+    const { data: updatedUser, error: updateError } = await client
       .from('users')
       .update({
         full_name: fullName,
@@ -517,7 +517,11 @@ export class AuthService {
         onboarding_completed: true,
         last_login_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select(
+        'id, email, full_name, user_name, profile_picture_url, user_type, onboarding_completed, country, timezone',
+      )
+      .single();
 
     if (updateError) {
       this.auditService.error(
@@ -528,6 +532,20 @@ export class AuthService {
         },
       );
       throw new BadRequestException('Failed to complete onboarding');
+    }
+
+    // Cache updated user profile immediately (Write-Through)
+    try {
+      await this.redis.setex(
+        `user:profile:${userId}`,
+        60 * 60,
+        JSON.stringify(updatedUser),
+      );
+    } catch (error) {
+      this.auditService.warn(
+        `Redis cache update failed for ${userId}: ${error.message}`,
+        'AuthService',
+      );
     }
 
     // Generate tokens
@@ -590,7 +608,7 @@ export class AuthService {
     }
 
     // Update user with profile details
-    const { error: updateError } = await client
+    const { data: updatedUser, error: updateError } = await client
       .from('users')
       .update({
         full_name: data.fullName,
@@ -604,13 +622,31 @@ export class AuthService {
         onboarding_completed: true,
         last_login_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select(
+        'id, email, full_name, user_name, profile_picture_url, user_type, onboarding_completed, country, timezone',
+      )
+      .single();
 
     if (updateError) {
       this.auditService.error('Failed to update user profile', 'AuthService', {
         error: updateError.message,
       });
       throw new BadRequestException('Failed to update profile');
+    }
+
+    // Cache updated user profile immediately (Write-Through)
+    try {
+      await this.redis.setex(
+        `user:profile:${userId}`,
+        60 * 60,
+        JSON.stringify(updatedUser),
+      );
+    } catch (error) {
+      this.auditService.warn(
+        `Redis cache update failed for ${userId}: ${error.message}`,
+        'AuthService',
+      );
     }
 
     // Generate new tokens with updated onboarding status

@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { NewReminderDialog } from "./dashboard/reminder/new-reminder-dialog";
 
 export function NavMain({
@@ -23,6 +23,7 @@ export function NavMain({
   }[];
 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <SidebarGroup>
@@ -54,6 +55,7 @@ export function NavMain({
               <SidebarMenuButton
                 isActive={item.url === pathname}
                 tooltip={item.title}
+                onClick={() => router.push(item.url)}
               >
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>

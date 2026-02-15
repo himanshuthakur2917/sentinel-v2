@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { SectionCards } from "../section-cards";
 import type { TeamStats } from "@/types/dashboard";
 
 export function TeamManagerDashboard({ userId }: { userId: string }) {
@@ -12,12 +12,6 @@ export function TeamManagerDashboard({ userId }: { userId: string }) {
     queryKey: ["team-stats", userId],
     queryFn: () => api.get("/reminders/dashboard/team/stats"),
   });
-
-  const getTrendIcon = (change: number) => {
-    if (change > 0) return <TrendingUp className="w-4 h-4 text-green-500" />;
-    if (change < 0) return <TrendingDown className="w-4 h-4 text-red-500" />;
-    return <Minus className="w-4 h-4 text-gray-500" />;
-  };
 
   if (isLoading) {
     return (
@@ -45,68 +39,38 @@ export function TeamManagerDashboard({ userId }: { userId: string }) {
       </div>
 
       {/* Team Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg Completion Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-3xl font-bold">
-                {(teamStats?.avgCompletionRate || 0).toFixed(0)}%
-              </div>
-              <div className="flex items-center gap-1">
-                {getTrendIcon(teamStats?.trendChange || 0)}
-                <span className="text-sm text-muted-foreground">
-                  {(teamStats?.trendChange ?? 0) > 0 && "+"}
-                  {teamStats?.trendChange ?? 0}%
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Reminders
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {teamStats?.totalTeamReminders || 0}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              On-Time
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {teamStats?.onTimeCount || 0}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Overdue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">
-              {teamStats?.overdueCount || 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <SectionCards
+        cards={[
+          {
+            title: "Avg Completion Rate",
+            value: `${(teamStats?.avgCompletionRate || 0).toFixed(0)}%`,
+            trend: teamStats?.trendChange || 0,
+            trendLabel: "Team trend",
+            footerLabel: "Average across all members",
+          },
+          {
+            title: "Total Reminders",
+            value: teamStats?.totalTeamReminders || 0,
+            trend: 0,
+            trendLabel: "Total assigned",
+            footerLabel: "Active team workload",
+          },
+          {
+            title: "On-Time",
+            value: teamStats?.onTimeCount || 0,
+            trend: 0,
+            trendLabel: "Completed on time",
+            footerLabel: `${((teamStats?.onTimeCount || 0) / (teamStats?.completedTeamReminders || 1) * 100).toFixed(0)}% of completed`,
+          },
+          {
+            title: "Overdue",
+            value: teamStats?.overdueCount || 0,
+            trend: 0, // could calculate overdue trend if supported
+            trendLabel: "Needs attention",
+            footerLabel: "Missed deadlines",
+          },
+        ]}
+      />
 
       {/* Team Members Performance */}
       <Card>
