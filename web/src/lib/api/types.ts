@@ -94,6 +94,8 @@ export interface CurrentUser {
   profile_picture_url?: string;
   user_type: "student" | "working_professional" | "team_manager";
   onboarding_completed: boolean;
+  country?: string;
+  timezone?: string;
 }
 
 export interface ResendOtpRequest {

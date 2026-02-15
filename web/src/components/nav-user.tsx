@@ -30,11 +30,14 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuthStore } from "@/store/auth.store"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { ProfileDialog } from "@/components/profile-dialog"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { user, logout } = useAuthStore()
   const router = useRouter()
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
 
   console.log(user)
 
@@ -98,7 +101,7 @@ export function NavUser() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsProfileOpen(true)}>
                 <IconUserCircle />
                 Account
               </DropdownMenuItem>
@@ -119,6 +122,7 @@ export function NavUser() {
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+      <ProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </SidebarMenu>
   )
 }

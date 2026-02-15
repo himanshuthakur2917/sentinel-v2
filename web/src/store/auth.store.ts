@@ -11,6 +11,8 @@ const mapUser = (apiUser: CurrentUser): User => ({
   profilePictureUrl: apiUser.profile_picture_url,
   userType: apiUser.user_type,
   onboardingCompleted: apiUser.onboarding_completed,
+  country: apiUser.country,
+  timezone: apiUser.timezone,
 });
 
 interface User {
@@ -21,6 +23,8 @@ interface User {
   profilePictureUrl?: string;
   userType: "student" | "working_professional" | "team_manager";
   onboardingCompleted: boolean;
+  country?: string;
+  timezone?: string;
 }
 
 interface AuthState {
