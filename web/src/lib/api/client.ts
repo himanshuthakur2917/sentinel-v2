@@ -61,14 +61,8 @@ export class HttpClient {
 
         // Handle 401 Unauthorized errors
         if (error.response?.status === 401 && !originalRequest._retry) {
-          // Check if we have a refresh token
-          const refreshToken = this.getRefreshToken();
-
-          if (!refreshToken) {
-            // No refresh token - redirect to login
-            this.redirectToLogin();
-            return Promise.reject(this.handleError(error));
-          }
+          // Check if we have a refresh token (in cookie, so we might not see it here)
+          // Just proceed to try refreshing
 
           // Prevent infinite refresh loops
           if (originalRequest.url?.includes("/auth/refresh")) {
@@ -84,11 +78,11 @@ export class HttpClient {
             this.isRefreshing = true;
 
             try {
-              // Attempt to refresh the token
+              // Attempt to refresh the token - browser will send cookie automatically
               const response = await this.axiosInstance.post<{
                 accessToken: string;
                 refreshToken: string;
-              }>("/auth/refresh", { refreshToken });
+              }>("/auth/refresh", {});
 
               const { accessToken } = response.data;
 
@@ -166,16 +160,8 @@ export class HttpClient {
   }
 
   private getRefreshToken(): string | null {
-    if (typeof document === "undefined") return null;
-
-    const cookies = document.cookie.split(";");
-    const refreshTokenCookie = cookies.find((cookie) =>
-      cookie.trim().startsWith("refreshToken="),
-    );
-
-    if (!refreshTokenCookie) return null;
-
-    return refreshTokenCookie.split("=")[1];
+    // Refresh token is httpOnly, we can't read it
+    return null;
   }
 
   private handleError(error: AxiosError<ErrorResponse>): ApiError {
