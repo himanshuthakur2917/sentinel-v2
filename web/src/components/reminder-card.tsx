@@ -1,12 +1,27 @@
 import * as React from "react";
 import { Check, ChevronRight } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Reminder } from "@/types/reminder/reminder";
+import { reminderApi } from "@/lib/api/reminders.api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export default function ReminderCard({ reminder }: { reminder: Reminder }) {
+  const queryClient = useQueryClient();
   const date = new Date(reminder.initial_deadline);
   const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
     date,
@@ -18,10 +33,44 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
     hour12: true,
   }).format(date);
 
+  // Format completed date if available
+  const completedDate = reminder.completed_at ? new Date(reminder.completed_at) : null;
+  const completedDateString = completedDate
+    ? new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(completedDate)
+    : "";
+
   const isCompleted = reminder.completion_status === "completed";
 
+  const markCompleteMutation = useMutation({
+    mutationFn: async () => {
+      await reminderApi.update(reminder.id, {
+        completion_status: "completed",
+        completed_at: new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      toast.success("Reminder marked as complete");
+    },
+    onError: (error) => {
+      toast.error("Failed to update reminder");
+      console.error(error);
+    },
+  });
+
   return (
-    <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border bg-card justify-between">
+    <Card
+      className={cn(
+        "overflow-hidden border-none shadow-sm ring-1 ring-border bg-card justify-between transition-opacity duration-300",
+        isCompleted && "opacity-60 grayscale-[0.5]"
+      )}
+    >
       <div className="p-4 flex flex-col gap-3">
         {/* Header Row: Date Box + Title */}
         <div className="flex items-start gap-3">
@@ -107,22 +156,51 @@ export default function ReminderCard({ reminder }: { reminder: Reminder }) {
         )}
       >
         {isCompleted ? (
-          <>
-            <div className="rounded-full bg-green-600 p-0.5 text-white dark:bg-green-500">
-              <Check className="h-3 w-3" />
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <div className="rounded-full bg-green-600 p-0.5 text-white dark:bg-green-500">
+                <Check className="h-3 w-3" />
+              </div>
+              <span>Completed</span>
             </div>
-            <span>Completed</span>
-          </>
-        ) : (
-          <div className="flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors">
-            <Checkbox
-              id={`check-${reminder.id}`}
-              className="rounded-full data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-            />
-            <label htmlFor={`check-${reminder.id}`} className="cursor-pointer">
-              Mark as complete
-            </label>
+            {completedDateString && (
+              <span className="text-xs opacity-80 font-normal">
+                {completedDateString}
+              </span>
+            )}
           </div>
+        ) : (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <div className="flex items-center gap-2 cursor-pointer hover:text-foreground transition-colors w-full">
+                <Checkbox
+                  className="rounded-full data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 pointer-events-none"
+                />
+                <label
+                  className="cursor-pointer flex-1"
+                >
+                  Mark as complete
+                </label>
+              </div>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Mark as Complete?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to mark this reminder as completed? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => markCompleteMutation.mutate()}
+                  disabled={markCompleteMutation.isPending}
+                >
+                  {markCompleteMutation.isPending ? "Marking..." : "Yes, Mark Complete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </div>
     </Card>

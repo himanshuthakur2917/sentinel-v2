@@ -10,6 +10,7 @@ export interface Reminder {
   priority: ReminderPriority;
   initial_deadline: Date;
   completion_status: CompletionStatus;
+  completed_at?: Date | string;
   is_team_reminder: boolean;
   is_recurring?: boolean;
   recurrence_pattern?: string;
