@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../database';
 import { AuditService } from '../audit';
+import { CreateReminderDto } from './dto/create-reminder.dto';
+import { UpdateReminderDto } from './dto/update-reminder.dto';
 
 export interface DashboardStats {
   totalReminders: number;
@@ -211,5 +213,100 @@ export class RemindersService {
     }
 
     return data;
+  }
+
+  /**
+   * Create a new reminder
+   */
+  async create(userId: string, dto: CreateReminderDto) {
+    const client = this.supabaseService.getClient();
+
+    const { data, error } = await client
+      .from('reminders')
+      .insert({
+        ...dto,
+        user_id: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      this.auditService.error(
+        `Failed to create reminder for user ${userId}: ${error.message}`,
+        'RemindersService',
+      );
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Find one reminder by ID
+   */
+  async findOne(userId: string, id: string) {
+    const client = this.supabaseService.getClient();
+
+    const { data, error } = await client
+      .from('reminders')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Update a reminder
+   */
+  async update(userId: string, id: string, dto: UpdateReminderDto) {
+    const client = this.supabaseService.getClient();
+
+    const { data, error } = await client
+      .from('reminders')
+      .update(dto)
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      this.auditService.error(
+        `Failed to update reminder ${id}: ${error.message}`,
+        'RemindersService',
+      );
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
+   * Delete a reminder
+   */
+  async delete(userId: string, id: string) {
+    const client = this.supabaseService.getClient();
+
+    // Soft delete by setting completion_status to 'deleted'
+    const { error } = await client
+      .from('reminders')
+      .update({ completion_status: 'deleted' })
+      .eq('id', id)
+      .eq('user_id', userId);
+
+    if (error) {
+      this.auditService.error(
+        `Failed to delete reminder ${id}: ${error.message}`,
+        'RemindersService',
+      );
+      throw error;
+    }
+
+    return { success: true };
   }
 }
