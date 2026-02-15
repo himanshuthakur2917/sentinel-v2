@@ -47,7 +47,7 @@ export class AuthGateway implements OnGatewayInit, OnModuleInit {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'users' },
         (payload) => {
-          (async () => {
+          void (async () => {
             this.auditService.debug(
               `User update detected for ID: ${payload.new.id}`,
               'AuthGateway',

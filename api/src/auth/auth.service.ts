@@ -821,7 +821,7 @@ export class AuthService {
     const { data: user, error } = await client
       .from('users')
       .select(
-        'id, email, full_name, user_name, profile_picture_url, user_type, onboarding_completed',
+        'id, email, full_name, user_name, profile_picture_url, user_type, onboarding_completed, country, timezone',
       )
       .eq('id', userId)
       .single();
