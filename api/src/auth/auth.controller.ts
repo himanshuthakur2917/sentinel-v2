@@ -9,8 +9,10 @@ import {
   HttpStatus,
   Res,
   BadRequestException,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService, AuthTokens } from './auth.service';
 import {
   RegisterDto,
@@ -174,9 +176,16 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Body() dto: RefreshTokenDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthTokens> {
-    const tokens = await this.authService.refreshTokens(dto.refreshToken);
+    const refreshToken = dto.refreshToken || request.cookies['refreshToken'];
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+
+    const tokens = await this.authService.refreshTokens(refreshToken);
     this.setAuthCookies(response, tokens);
     return tokens;
   }
