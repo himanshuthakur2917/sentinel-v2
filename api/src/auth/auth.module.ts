@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { OtpModule } from '../otp';
+import { AuthGateway } from './auth.gateway';
 
 @Module({
   imports: [
@@ -32,7 +33,14 @@ import { OtpModule } from '../otp';
     OtpModule,
   ],
   controllers: [AuthController, CsrfController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard, CsrfGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    RolesGuard,
+    CsrfGuard,
+    AuthGateway,
+  ],
   exports: [AuthService, JwtAuthGuard, RolesGuard, CsrfGuard],
 })
 export class AuthModule {}
