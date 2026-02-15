@@ -1,7 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getSocket, disconnectSocket } from "@/lib/socket";
+import { reminderApi } from "@/lib/api/reminders.api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import RemindersDashboard from "./reminder/reminders-dashboard";
@@ -9,17 +11,43 @@ import type { DashboardStats } from "@/types/dashboard";
 import type { Reminder } from "@/types/reminder/reminder";
 
 export function IndividualDashboard({ userId }: { userId: string }) {
+  const queryClient = useQueryClient();
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats", userId],
-    queryFn: () => api.get("/reminders/dashboard/stats"),
+    queryFn: () => reminderApi.getStats(),
   });
 
   const { data: reminders, isLoading: remindersLoading } = useQuery<Reminder[]>(
     {
       queryKey: ["reminders", userId],
-      queryFn: () => api.get("/reminders"),
+      queryFn: () => reminderApi.getReminders(),
     },
   );
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    const handleReminderUpdate = () => {
+      // Invalidate queries to fetch fresh data
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    };
+
+    socket.on("connect", () => {
+      console.log("Connected to websocket");
+    });
+
+    socket.on("reminder:created", handleReminderUpdate);
+    socket.on("reminder:updated", handleReminderUpdate);
+    socket.on("reminder:deleted", handleReminderUpdate);
+
+    return () => {
+      socket.off("reminder:created", handleReminderUpdate);
+      socket.off("reminder:updated", handleReminderUpdate);
+      socket.off("reminder:deleted", handleReminderUpdate);
+      disconnectSocket();
+    };
+  }, [queryClient]);
 
   if (isLoading) {
     return (

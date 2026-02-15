@@ -80,7 +80,12 @@ export function NavUser() {
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.profilePictureUrl} alt={user.fullName} />
                   <AvatarFallback className="rounded-lg">
-                    {user.fullName?.split(" ")[0][0].toUpperCase() + user.fullName?.split(" ")[1][0].toUpperCase() || "CN"}
+                    {(() => {
+                      const names = user.fullName?.split(" ") || [];
+                      const firstInitial = names[0]?.[0]?.toUpperCase() || "";
+                      const lastInitial = names[1]?.[0]?.toUpperCase() || "";
+                      return firstInitial + lastInitial || "CN";
+                    })()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">

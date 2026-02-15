@@ -16,6 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Reminder } from "@/types/reminder";
+import { reminderApi, CreateReminderRequest } from "@/lib/api/reminders.api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface ManualInputFormProps {
   initialData?: Partial<Reminder>;
@@ -39,11 +42,35 @@ export function ManualInputForm({
     ...initialData,
   });
 
+  const queryClient = useQueryClient();
+
+  const createReminderMutation = useMutation({
+    mutationFn: (data: CreateReminderRequest) => reminderApi.create(data),
+    onSuccess: () => {
+      toast.success("Reminder created successfully");
+      queryClient.invalidateQueries({ queryKey: ["reminders"] });
+      onClose();
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create reminder: ${error.message}`);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Call API to create reminder
-    console.log("Submitting Reminder:", formData);
-    onClose();
+    
+    // Prepare data for API
+    const reminderData: CreateReminderRequest = {
+        title: formData.title || "",
+        description: formData.description,
+        category: formData.category || "personal",
+        priority: formData.priority,
+        initial_deadline: formData.initial_deadline ? formData.initial_deadline.toISOString() : new Date().toISOString(),
+        is_recurring: formData.is_recurring,
+        recurrence_pattern: formData.recurrence_pattern,
+    };
+
+    createReminderMutation.mutate(reminderData);
   };
 
   return (
@@ -272,7 +299,9 @@ export function ManualInputForm({
         <Button type="button" variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button type="submit">Create Reminder</Button>
+        <Button type="submit" disabled={createReminderMutation.isPending}>
+          {createReminderMutation.isPending ? "Creating..." : "Create Reminder"}
+        </Button>
       </div>
     </form>
   );
