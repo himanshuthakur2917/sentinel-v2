@@ -51,16 +51,13 @@ export function proxy(request: NextRequest) {
   // Check if user is trying to access auth routes while already authenticated
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
-  if (isAuthRoute && token) {
+  if ((pathname === "/" || isAuthRoute) && token ) {
     // User is authenticated and trying to access login/register
-    const { userId, onboardingCompleted } = getUserDataFromToken(token);
+    const { userId} = getUserDataFromToken(token);
 
     if (userId) {
-      // Check if onboarding is completed
-      if (!onboardingCompleted) {
         const dashboardUrl = new URL(`/dashboard/${userId}`, request.url);
         return NextResponse.redirect(dashboardUrl);
-      }
     } else {
       // If we can't extract user ID, redirect to generic dashboard
       const loginUrl = new URL("/auth/login", request.url);

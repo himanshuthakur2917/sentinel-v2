@@ -61,4 +61,23 @@ export const reminderApi = {
   delete: async (id: string): Promise<void> => {
     return httpClient.delete<void>(`/reminders/${id}`);
   },
+
+  /**
+   * Process voice command
+   */
+  processVoiceCommand: async (
+    audioBlob: Blob,
+  ): Promise<Partial<CreateReminderRequest>> => {
+    const formData = new FormData();
+    formData.append("audio", audioBlob, "recording.webm");
+    return httpClient.post<Partial<CreateReminderRequest>>(
+      "/reminders/voice",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+  },
 };
